@@ -4,7 +4,7 @@
 //
 // ***********************************************************************
 //
-//       Copyright (2018) Battelle Memorial Institute
+//       Copyright (2019) Battelle Memorial Institute
 //                      All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
