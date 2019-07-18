@@ -91,4 +91,5 @@ Possible options (can be combined):
                       b/w or latency test would perform variable-sized message exchanges a 100 
                       times between PE#0 and {PE#1, PE#3}. The -z <percent> option can limit the 
                       number of message exchanges by selecting a percentage of the actual the number 
-                      of ghosts. Hence, this option can help 'shrink' a graph.
+                      of ghosts, but maintaining the overall structure of the original graph. 
+                      Hence, this option can help 'shrink' a graph.
