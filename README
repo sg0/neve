@@ -74,8 +74,8 @@ Possible options (can be combined):
 6.  -r <nranks>     : This is used to control the number of aggregators in MPI I/O and is
                       meaningful when an input binary graph file is passed with option "-f".
                       naggr := (nranks > 1) ? (nprocs/nranks) : nranks;
-7   -w              : Report Bandwidth in MB/s.
-8.  -t              : Report Latency in microseconds.
+7   -w              : Report Bandwidth in MB/s[*].
+8.  -t              : Report Latency in microseconds[*].
 9.  -x <bytes>      : Maximum data exchange size (in bytes).
 10. -m <bytes>      : Minimum data exchange size (in bytes).
 11. -s <PE>         : Analyze a single process neighborhood. Performs bidirectional message 
@@ -93,3 +93,8 @@ Possible options (can be combined):
                       number of message exchanges by selecting a percentage of the actual the number 
                       of ghosts, but maintaining the overall structure of the original graph. 
                       Hence, this option can help 'shrink' a graph.
+
+[*]Note: Unless -w or -t is passed, the code will just load the graph and create the graph data 
+structure. This is deliberate, in case we want to measure the overhead of loading a graph and 
+time only the file I/O part (like measuring the impact of different #aggregators through the 
+-r <nranks> option).
