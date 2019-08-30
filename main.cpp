@@ -69,7 +69,8 @@ static bool performBWTest = false;
 static bool performLTTest = false;
 static bool chooseSingleNbr = false;
 static int processNbr = 0;
-static int graphShrinkPercent = 0;
+static bool shrinkGraph = false;
+static float graphShrinkPercent = 0;
 
 // parse command line parameters
 static void parseCommandLine(const int argc, char * const argv[]);
@@ -249,7 +250,8 @@ void parseCommandLine(const int argc, char * const argv[])
       processNbr = atoi(optarg);
       break;
     case 'z':
-      graphShrinkPercent = atoi(optarg);
+      shrinkGraph = true;
+      graphShrinkPercent = atof(optarg);
       break;
     default:
       assert(0 && "Should not reach here!!");
@@ -270,12 +272,23 @@ void parseCommandLine(const int argc, char * const argv[])
           << "This option does nothing for generated (synthetic) graphs." << std::endl;
   } 
    
-  if (me == 0 && generateGraph && graphShrinkPercent > 0) 
+  if (me == 0 && generateGraph && shrinkGraph && graphShrinkPercent > 0.0) 
   {
       std::cout << "Graph shrinking (option -z) is only applicable for real-world graphs. "
           << "This option does nothing for generated (synthetic) graphs." << std::endl;
   } 
-  
+   
+  if (me == 0 && shrinkGraph && graphShrinkPercent <= 0.0) 
+  {
+      std::cout << "Graph shrinking (option -z) must be greater than 0.0. " << std::endl;
+  }
+
+
+  if (me == 0 && shrinkGraph && performLTTest)
+  {
+	  std::cout << "Graph shrinking is ONLY valid for bandwidth test, NOT latency test which just performs message exchanges across the process neighborhood of a graph." << std::endl;	  
+  }
+
   // errors
   if (me == 0 && (argc == 1)) 
   {
@@ -313,9 +326,9 @@ void parseCommandLine(const int argc, char * const argv[])
       MPI_Abort(MPI_COMM_WORLD, -99);
   }
   
-  if (me == 0 && !generateGraph && (graphShrinkPercent != 0 && (graphShrinkPercent < 0 || graphShrinkPercent > 100))) 
+  if (me == 0 && !generateGraph && shrinkGraph && (graphShrinkPercent != 0.0 && (graphShrinkPercent < 0.0 || graphShrinkPercent > 100.0))) 
   {
-      std::cerr << "Allowable value of graph shrink percentage is 1-100." << std::endl;
+      std::cerr << "Allowable value of graph shrink percentage is 0.0...-100%." << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
   }
 } // parseCommandLine

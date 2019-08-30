@@ -119,11 +119,12 @@ Possible options (can be combined):
                       across processes as actual ghosts. For e.g., lets assume that a graph is
                       distributed across 4 processes, and PE#0 has two neighbors, PE#1 and PE#3
                       with whom it shares a 100 ghost vertices each. In such a configuration, 
-                      b/w or latency test would perform variable-sized message exchanges a 100 
-                      times between PE#0 and {PE#1, PE#3}. The -z <percent> option can limit the 
+                      the b/w test would perform variable-sized message exchanges a 100 times 
+		      between PE#0 and {PE#1, PE#3}. The -z <percent> option can limit the 
                       number of message exchanges by selecting a percentage of the actual the number 
                       of ghosts, but maintaining the overall structure of the original graph. 
-                      Hence, this option can help 'shrink' a graph.
+                      Hence, this option can help 'shrink' a graph. Only valid for b/w test, because
+		      latency test will just perform message transfers between process neighborhoods.
 
 [*]Note: Unless -w or -t is passed, the code will just load the graph and create the graph data 
 structure. This is deliberate, in case we want to measure the overhead of loading a graph and 

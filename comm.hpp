@@ -101,12 +101,12 @@ class Comm
                 } \
             } \
             degree_ = targets_.size(); \
-            if (shrinkp_ > 0) \
+            if (shrinkp_ > 0.0) \
             { \
                 GraphElem new_nghosts = 0; \
                 for (int p = 0; p < degree_; p++) \
                 { \
-                    nghosts_in_target_[p] = (shrinkp_ * nghosts_in_target_[p]) / 100; \
+                    nghosts_in_target_[p] = (int)((shrinkp_ * (float)nghosts_in_target_[p]) / (float)100); \
                     if (nghosts_in_target_[p] == 0) \
                         nghosts_in_target_[p] = 1; \
                     new_nghosts += nghosts_in_target_[p]; \
@@ -145,7 +145,7 @@ class Comm
             targets_(0), degree_(0)
         { COMM_COMMON(); }
          
-        Comm(Graph* g, GraphElem min_size, GraphElem max_size, int shrink_percent):
+        Comm(Graph* g, GraphElem min_size, GraphElem max_size, float shrink_percent):
             g_(g), nghosts_(0), lnv_(0),
             pindex_(0), nghosts_in_target_(0), 
             sbuf_(nullptr), rbuf_(nullptr),
@@ -786,7 +786,7 @@ class Comm
             lt_loop_count_, lt_loop_count_large_,
             lt_skip_count_, lt_skip_count_large_;
 
-        int shrinkp_; // graph shrink percent
+        float shrinkp_; // graph shrink percent
         int rank_, size_, degree_;
         std::vector<int> targets_;
         MPI_Comm comm_;
