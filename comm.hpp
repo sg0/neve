@@ -62,9 +62,6 @@
 #define LT_LOOP_COUNT_LARGE     1000
 #define LT_SKIP_COUNT_LARGE     10
 
-// TODO FIXME add a version that only considers x% of ghosts
-// per process
-
 class Comm
 {
     public:
@@ -267,22 +264,22 @@ class Comm
 
         // kernel for latency
         inline void comm_kernel_lt(GraphElem const& size)
-        { 
-            for (int p = 0; p < degree_; p++)
-            {
-                MPI_Irecv(rbuf_, size, MPI_CHAR, targets_[p], 
-                        100, comm_, rreq_ + p);
-            }
-            
-            for (int p = 0; p < degree_; p++)
-            {
-                MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 
-                        100, comm_, sreq_ + p);
-            }
+	{ 
+		for (int p = 0; p < degree_; p++)
+		{
+			MPI_Irecv(rbuf_, size, MPI_CHAR, targets_[p], 
+					p, comm_, rreq_ + p);
+		}
 
-            MPI_Waitall(degree_, rreq_, MPI_STATUSES_IGNORE);
-            MPI_Waitall(degree_, sreq_, MPI_STATUSES_IGNORE);
-        }
+		for (int p = 0; p < degree_; p++)
+		{
+			MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 
+					p, comm_, sreq_ + p);
+		}
+
+		MPI_Waitall(degree_, rreq_, MPI_STATUSES_IGNORE);
+		MPI_Waitall(degree_, sreq_, MPI_STATUSES_IGNORE);
+	}
 
         // kernel for latency with extra input parameters
         inline void comm_kernel_lt(GraphElem const& size, GraphElem const& npairs, 
@@ -293,7 +290,7 @@ class Comm
                 if (p != me)
                 {
                     MPI_Irecv(rbuf_, size, MPI_CHAR, p, 
-                            100, gcomm, rreq_ + (j++));
+                            j, gcomm, rreq_ + (j++));
                 }
             }
 
@@ -302,7 +299,7 @@ class Comm
                 if (p != me)
                 {
                     MPI_Isend(sbuf_, size, MPI_CHAR, p, 
-                            100, gcomm, sreq_ + (j++));
+                            j, gcomm, sreq_ + (j++));
                 }
             }
 
@@ -322,7 +319,7 @@ class Comm
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
                         MPI_Irecv(rbuf_, size, MPI_CHAR, MPI_ANY_SOURCE, 
-                                100, gcomm, rreq_ + (j++));
+                                j, gcomm, rreq_ + (j++));
                     }
                 }
             }
@@ -335,7 +332,7 @@ class Comm
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
                         MPI_Isend(sbuf_, size, MPI_CHAR, p, 
-                                100, gcomm, sreq_+ (j++));
+                                j, gcomm, sreq_+ (j++));
                     }
                 }
             }
@@ -452,12 +449,12 @@ class Comm
                     << std::endl;
             }
 
-            for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
+	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
             {       
                 // memset
                 touch_buffers(size);
 
-                if(size > large_msg_size_) 
+                if (size > large_msg_size_) 
                 {
                     loop = lt_loop_count_large_;
                     skip = lt_skip_count_large_;
@@ -475,7 +472,7 @@ class Comm
                     }
                     
                     comm_kernel_lt(size);
-                }   
+                } 
 
                 t_end = MPI_Wtime();
                 t = (t_end - t_start); 
@@ -505,7 +502,7 @@ class Comm
                         << std::endl;
                 }
             }
-        }     
+        } 
 
         // Bandwidth/Latency estimation by analyzing a 
         // single process neighborhood
