@@ -112,6 +112,7 @@ class Comm
             } \
             sbuf_ = new char[max_size_]; \
             rbuf_ = new char[max_size_]; \
+            assert(nghosts_ >= degree_); \
             sreq_ = new MPI_Request[nghosts_]; \
             rreq_ = new MPI_Request[nghosts_]; \
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
@@ -290,7 +291,8 @@ class Comm
                 if (p != me)
                 {
                     MPI_Irecv(rbuf_, size, MPI_CHAR, p, 
-                            j, gcomm, rreq_ + (j++));
+                            j, gcomm, rreq_ + j);
+                    j++;
                 }
             }
 
@@ -299,7 +301,8 @@ class Comm
                 if (p != me)
                 {
                     MPI_Isend(sbuf_, size, MPI_CHAR, p, 
-                            j, gcomm, sreq_ + (j++));
+                            j, gcomm, sreq_ + j);
+                    j++;
                 }
             }
 
@@ -319,7 +322,8 @@ class Comm
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
                         MPI_Irecv(rbuf_, size, MPI_CHAR, MPI_ANY_SOURCE, 
-                                j, gcomm, rreq_ + (j++));
+                                j, gcomm, rreq_ + j);
+                        j++;
                     }
                 }
             }
@@ -332,7 +336,8 @@ class Comm
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
                         MPI_Isend(sbuf_, size, MPI_CHAR, p, 
-                                j, gcomm, sreq_+ (j++));
+                                j, gcomm, sreq_+ j);
+                        j++;
                     }
                 }
             }
