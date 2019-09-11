@@ -73,7 +73,6 @@ class Comm
             MPI_Comm_rank(comm_, &rank_); \
             const GraphElem lne = g_->get_lne(); \
             lnv_ = g_->get_lnv(); \
-            int pdx = 0; \
             std::vector<GraphElem> a2a_send_dat(size_), a2a_recv_dat(size_); \
             /* track outgoing ghosts not owned by me */ \
             for (GraphElem i = 0; i < lnv_; i++) \
@@ -86,19 +85,20 @@ class Comm
                     const int owner = g_->get_owner(edge.tail_); \
                     if (owner != rank_) \
                     { \
-                        out_nghosts_ += 1; \
                         if (std::find(targets_.begin(), targets_.end(), owner) == targets_.end()) \
                         { \
                             targets_.push_back(owner); \
-                            target_pindex_.insert({owner, pdx}); \
-                            pdx += 1; \
-                            nghosts_in_target_.resize(pdx, 0); \
+                            target_pindex_.insert({owner, outdegree_}); \
+                            outdegree_++; \
+                            nghosts_in_target_.push_back(0); \
                         } \
-                        nghosts_in_target_[target_pindex_[owner]] += 1; \
+                        out_nghosts_++; \
+                        a2a_send_dat[owner]++; \
+                        nghosts_in_target_[target_pindex_[owner]]++; \
                     } \
                 } \
             } \
-            outdegree_ = pdx; \
+            assert(outdegree_ == nghosts_in_target_.size()); \
             if (shrinkp_ > 0.0) \
             { \
                 GraphElem new_nghosts = 0; \
@@ -112,7 +112,14 @@ class Comm
                     a2a_send_dat[peit->first] = nghosts_in_target_[p]; \
                     ++peit; \
                 } \
+                GraphElem nghosts[2] = {out_nghosts_, new_nghosts}, all_nghosts[2] = {0, 0}; \
+                MPI_Reduce(nghosts, all_nghosts, 2, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_); \
                 out_nghosts_ = new_nghosts; \
+                if (rank_ == 0) \
+                { \
+                    std::cout << "Considering only " << shrinkp_ << "% of overall #ghosts, previous total outgoing #ghosts: " \
+                    << all_nghosts[0] << ", current total outgoing #ghosts: " << all_nghosts[1] << std::endl; \
+                } \
             } \
             /* track incoming communication (processes for which I am a ghost) */ \
             /* send to PEs in targets_ list about shared ghost info */ \
@@ -129,6 +136,7 @@ class Comm
                     in_nghosts_ += a2a_recv_dat[p]; \
                 } \
             } \
+            assert(indegree_ == nghosts_in_source_.size()); \
             sbuf_ = new char[max_size_]; \
             rbuf_ = new char[max_size_]; \
             assert(in_nghosts_ >= indegree_); \
@@ -271,29 +279,31 @@ class Comm
         inline void comm_kernel_bw(GraphElem const& size)
         {
             // prepost recvs
+            GraphElem rng = 0;
             for (int p = 0; p < indegree_; p++)
             {
                 for (GraphElem g = 0; g < nghosts_in_source_[p]; g++)
                 {
-                    MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], g, comm_, 
-                            (rreq_ + p*nghosts_in_source_[p] + g));
+                    MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 101, comm_, rreq_ + rng);
+                    rng++;
                 }
             }
 
             // sends
+            GraphElem sng = 0;
             for (int p = 0; p < outdegree_; p++)
             {
                 for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
                 {
-                    MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], g, comm_, 
-                            (sreq_+ p*nghosts_in_target_[p] + g));
+                    MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 101, comm_, sreq_+ sng);
+                    sng++;
                 }
             }
 
             MPI_Waitall(in_nghosts_, rreq_, MPI_STATUSES_IGNORE);
             MPI_Waitall(out_nghosts_, sreq_, MPI_STATUSES_IGNORE);
         }
-
+        
         // kernel for latency
         inline void comm_kernel_lt(GraphElem const& size)
 	{
