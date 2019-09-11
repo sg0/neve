@@ -71,10 +71,11 @@ class Comm
             comm_ = g_->get_comm(); \
             MPI_Comm_size(comm_, &size_); \
             MPI_Comm_rank(comm_, &rank_); \
-            /* track ghosts not owned by me */ \
             const GraphElem lne = g_->get_lne(); \
             lnv_ = g_->get_lnv(); \
             int pdx = 0; \
+            std::vector<GraphElem> a2a_send_dat(size_), a2a_recv_dat(size_); \
+            /* track outgoing ghosts not owned by me */ \
             for (GraphElem i = 0; i < lnv_; i++) \
             { \
                 GraphElem e0, e1; \
@@ -85,36 +86,55 @@ class Comm
                     const int owner = g_->get_owner(edge.tail_); \
                     if (owner != rank_) \
                     { \
-                        nghosts_ += 1; \
+                        out_nghosts_ += 1; \
                         if (std::find(targets_.begin(), targets_.end(), owner) == targets_.end()) \
                         { \
                             targets_.push_back(owner); \
-                            pindex_.insert({owner, pdx}); \
+                            target_pindex_.insert({owner, pdx}); \
                             pdx += 1; \
                             nghosts_in_target_.resize(pdx, 0); \
                         } \
-                        nghosts_in_target_[pindex_[owner]] += 1; \
+                        nghosts_in_target_[target_pindex_[owner]] += 1; \
                     } \
                 } \
             } \
-            degree_ = targets_.size(); \
+            outdegree_ = pdx; \
             if (shrinkp_ > 0.0) \
             { \
                 GraphElem new_nghosts = 0; \
-                for (int p = 0; p < degree_; p++) \
+                std::unordered_map<int, int>::iterator peit = target_pindex_.begin(); \
+                for (int p = 0; p < outdegree_; p++) \
                 { \
                     nghosts_in_target_[p] = (int)((shrinkp_ * (float)nghosts_in_target_[p]) / (float)100); \
                     if (nghosts_in_target_[p] == 0) \
                         nghosts_in_target_[p] = 1; \
                     new_nghosts += nghosts_in_target_[p]; \
+                    a2a_send_dat[peit->first] = nghosts_in_target_[p]; \
+                    ++peit; \
                 } \
-                nghosts_ = new_nghosts; \
+                out_nghosts_ = new_nghosts; \
+            } \
+            /* track incoming communication (processes for which I am a ghost) */ \
+            /* send to PEs in targets_ list about shared ghost info */ \
+            MPI_Alltoall(a2a_send_dat.data(), 1, MPI_GRAPH_TYPE, a2a_recv_dat.data(), 1, MPI_GRAPH_TYPE, comm_); \
+            MPI_Barrier(comm_); \
+            for (int p = 0; p < size_; p++) \
+            { \
+                if (a2a_recv_dat[p] > 0) \
+                { \
+                    source_pindex_.insert({p, indegree_}); \
+                    sources_.push_back(p); \
+                    nghosts_in_source_.push_back(a2a_recv_dat[p]); \
+                    indegree_++; \
+                    in_nghosts_ += a2a_recv_dat[p]; \
+                } \
             } \
             sbuf_ = new char[max_size_]; \
             rbuf_ = new char[max_size_]; \
-            assert(nghosts_ >= degree_); \
-            sreq_ = new MPI_Request[nghosts_]; \
-            rreq_ = new MPI_Request[nghosts_]; \
+            assert(in_nghosts_ >= indegree_); \
+            assert(out_nghosts_ >= outdegree_); \
+            sreq_ = new MPI_Request[out_nghosts_]; \
+            rreq_ = new MPI_Request[in_nghosts_]; \
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
             if (lne > 1000) \
             { \
@@ -123,11 +143,14 @@ class Comm
                 if (bw_skip_count_ == BW_SKIP_COUNT) \
                     bw_skip_count_ = bw_skip_count_large_; \
             } \
+            a2a_send_dat.clear(); \
+            a2a_recv_dat.clear(); \
         } while(0)
 
         Comm(Graph* g):
-            g_(g), nghosts_(0), lnv_(0),
-            pindex_(0), nghosts_in_target_(0),
+            g_(g), in_nghosts_(0), out_nghosts_(0), lnv_(0),
+            target_pindex_(0), source_pindex_(0),
+            nghosts_in_target_(0), nghosts_in_source_(0),
             sbuf_(nullptr), rbuf_(nullptr),
             sreq_(nullptr), rreq_(nullptr),
             max_size_(MAX_SIZE), min_size_(MIN_SIZE),
@@ -140,12 +163,13 @@ class Comm
             lt_loop_count_large_(LT_LOOP_COUNT_LARGE),
             lt_skip_count_(LT_SKIP_COUNT), 
             lt_skip_count_large_(LT_SKIP_COUNT_LARGE),
-            targets_(0), degree_(0)
+            targets_(0), sources_(0), indegree_(0), outdegree_(0)
         { COMM_COMMON(); }
          
         Comm(Graph* g, GraphElem min_size, GraphElem max_size, float shrink_percent):
-            g_(g), nghosts_(0), lnv_(0),
-            pindex_(0), nghosts_in_target_(0), 
+            g_(g), in_nghosts_(0), out_nghosts_(0), lnv_(0),
+            target_pindex_(0), source_pindex_(0),
+            nghosts_in_target_(0), nghosts_in_source_(0),
             sbuf_(nullptr), rbuf_(nullptr),
             sreq_(nullptr), rreq_(nullptr),
             min_size_(min_size), max_size_(max_size), 
@@ -158,7 +182,8 @@ class Comm
             lt_loop_count_large_(LT_LOOP_COUNT_LARGE),
             lt_skip_count_(LT_SKIP_COUNT), 
             lt_skip_count_large_(LT_SKIP_COUNT_LARGE),
-            targets_(0), degree_(0), shrinkp_(shrink_percent)
+            targets_(0), sources_(0), indegree_(0), outdegree_(0),
+            shrinkp_(shrink_percent)
         { COMM_COMMON(); }       
         
         Comm(Graph* g, 
@@ -168,8 +193,9 @@ class Comm
                 int bw_skip_count, int bw_skip_count_large,
                 int lt_loop_count, int lt_loop_count_large,
                 int lt_skip_count, int lt_skip_count_large):
-            g_(g), nghosts_(0), lnv_(0), 
-            pindex_(0), nghosts_in_target_(0), 
+            g_(g), in_nghosts_(0), out_nghosts_(0), lnv_(0),
+            target_pindex_(0), source_pindex_(0),
+            nghosts_in_target_(0), nghosts_in_source_(0),
             sbuf_(nullptr), rbuf_(nullptr),
             sreq_(nullptr), rreq_(nullptr),
             max_size_(max_size), min_size_(min_size),
@@ -182,14 +208,17 @@ class Comm
             lt_loop_count_large_(lt_loop_count_large),
             lt_skip_count_(lt_skip_count), 
             lt_skip_count_large_(lt_skip_count_large),
-            targets_(0), degree_(0)
+            targets_(0), sources_(0), indegree_(0), outdegree_(0)
         { COMM_COMMON(); }
         
         ~Comm() 
         {            
             targets_.clear();
-            pindex_.clear();
+            target_pindex_.clear();
             nghosts_in_target_.clear();
+            sources_.clear();
+            source_pindex_.clear();
+            nghosts_in_source_.clear();
             delete []sbuf_;
             delete []rbuf_;
             delete []sreq_;
@@ -208,9 +237,9 @@ class Comm
         inline void comm_kernel_bw_extra_overhead(GraphElem const& size)
         {
             // prepost recvs
-            for (GraphElem g = 0; g < nghosts_; g++)
+            for (GraphElem g = 0; g < in_nghosts_; g++)
             {
-                MPI_Irecv(rbuf_, size, MPI_CHAR, MPI_ANY_SOURCE, 
+                MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[g], 
                         100, comm_, rreq_ + g);
             }
 
@@ -234,53 +263,53 @@ class Comm
                 }
             }
 
-            MPI_Waitall(nghosts_, rreq_, MPI_STATUSES_IGNORE);
-            MPI_Waitall(nghosts_, sreq_, MPI_STATUSES_IGNORE);
+            MPI_Waitall(in_nghosts_, rreq_, MPI_STATUSES_IGNORE);
+            MPI_Waitall(out_nghosts_, sreq_, MPI_STATUSES_IGNORE);
         }
 
         // kernel for bandwidth 
         inline void comm_kernel_bw(GraphElem const& size)
         {
             // prepost recvs
-            for (GraphElem g = 0; g < nghosts_; g++)
+            for (int p = 0; p < indegree_; p++)
             {
-                MPI_Irecv(rbuf_, size, MPI_CHAR, MPI_ANY_SOURCE, 
-                        100, comm_, rreq_ + g);
-            }
-
-            // sends
-            GraphElem ng = 0;
-            for (int p : targets_)
-            {
-                for (GraphElem g = 0; g < nghosts_in_target_[pindex_[p]]; g++)
+                for (GraphElem g = 0; g < nghosts_in_source_[p]; g++)
                 {
-                    MPI_Isend(sbuf_, size, MPI_CHAR, p, 100, comm_, sreq_+ ng);
-                    ng++;
+                    MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], g, comm_, 
+                            (rreq_ + p*nghosts_in_source_[p] + g));
                 }
             }
 
-            MPI_Waitall(nghosts_, rreq_, MPI_STATUSES_IGNORE);
-            MPI_Waitall(nghosts_, sreq_, MPI_STATUSES_IGNORE);
+            // sends
+            for (int p = 0; p < outdegree_; p++)
+            {
+                for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
+                {
+                    MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], g, comm_, 
+                            (sreq_+ p*nghosts_in_target_[p] + g));
+                }
+            }
+
+            MPI_Waitall(in_nghosts_, rreq_, MPI_STATUSES_IGNORE);
+            MPI_Waitall(out_nghosts_, sreq_, MPI_STATUSES_IGNORE);
         }
 
         // kernel for latency
         inline void comm_kernel_lt(GraphElem const& size)
-	{ 
-		for (int p = 0; p < degree_; p++)
-		{
-			MPI_Irecv(rbuf_, size, MPI_CHAR, targets_[p], 
-					p, comm_, rreq_ + p);
-		}
+	{
+	    for (int p = 0; p < indegree_; p++)
+	    {
+		MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
+	    }
 
-		for (int p = 0; p < degree_; p++)
-		{
-			MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 
-					p, comm_, sreq_ + p);
-		}
+	    for (int p = 0; p < outdegree_; p++)
+	    {
+		MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
+	    }
 
-		MPI_Waitall(degree_, rreq_, MPI_STATUSES_IGNORE);
-		MPI_Waitall(degree_, sreq_, MPI_STATUSES_IGNORE);
-	}
+            MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+        }
 
         // kernel for latency with extra input parameters
         inline void comm_kernel_lt(GraphElem const& size, GraphElem const& npairs, 
@@ -290,8 +319,7 @@ class Comm
             {
                 if (p != me)
                 {
-                    MPI_Irecv(rbuf_, size, MPI_CHAR, p, 
-                            j, gcomm, rreq_ + j);
+                    MPI_Irecv(rbuf_, size, MPI_CHAR, p, j, gcomm, rreq_ + j);
                     j++;
                 }
             }
@@ -300,8 +328,7 @@ class Comm
             {
                 if (p != me)
                 {
-                    MPI_Isend(sbuf_, size, MPI_CHAR, p, 
-                            j, gcomm, sreq_ + j);
+                    MPI_Isend(sbuf_, size, MPI_CHAR, p, j, gcomm, sreq_ + j);
                     j++;
                 }
             }
@@ -321,8 +348,7 @@ class Comm
                 {
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
-                        MPI_Irecv(rbuf_, size, MPI_CHAR, MPI_ANY_SOURCE, 
-                                j, gcomm, rreq_ + j);
+                        MPI_Irecv(rbuf_, size, MPI_CHAR, MPI_ANY_SOURCE, j, gcomm, rreq_ + j);
                         j++;
                     }
                 }
@@ -335,8 +361,7 @@ class Comm
                 {
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
-                        MPI_Isend(sbuf_, size, MPI_CHAR, p, 
-                                j, gcomm, sreq_+ j);
+                        MPI_Isend(sbuf_, size, MPI_CHAR, p, j, gcomm, sreq_+ j);
                         j++;
                     }
                 }
@@ -354,12 +379,12 @@ class Comm
             
             // find average number of ghost vertices
             GraphElem sum_ng = 0, avg_ng;
-            MPI_Reduce(&nghosts_, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+            MPI_Reduce(&out_nghosts_, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
             avg_ng = sum_ng / size_;
 
             // total communicating pairs
             int sum_npairs = 0;
-            MPI_Reduce(&degree_, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
+            MPI_Reduce(&outdegree_, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
             
             if(rank_ == 0) 
             {
@@ -440,7 +465,7 @@ class Comm
             
             // total communicating pairs
             int sum_npairs = 0;
-            MPI_Reduce(&degree_, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
+            MPI_Reduce(&outdegree_, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
 
             if(rank_ == 0) 
             {
@@ -477,6 +502,7 @@ class Comm
                     }
                     
                     comm_kernel_lt(size);
+                    MPI_Barrier(comm_);
                 } 
 
                 t_end = MPI_Wtime();
@@ -520,7 +546,7 @@ class Comm
             assert(target_nbrhood < size_);
              
             // find average number of ghost vertices
-            GraphElem avg_ng, sum_ng = nghosts_;
+            GraphElem avg_ng, sum_ng = out_nghosts_;
             MPI_Allreduce(MPI_IN_PLACE, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
             avg_ng = sum_ng / size_;
             
@@ -534,7 +560,7 @@ class Comm
             }
 
             // extract process neighborhood of target_nbrhood PE
-            int tgt_deg = degree_;
+            int tgt_deg = outdegree_;
             int tgt_rank = MPI_UNDEFINED, tgt_size = 0;
             MPI_Bcast(&tgt_deg, 1, MPI_INT, target_nbrhood, comm_);
 
@@ -663,11 +689,11 @@ class Comm
             assert(target_nbrhood < size_);
 
             // total communicating pairs
-            int sum_npairs = degree_;
+            int sum_npairs = outdegree_;
             MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
 
             // extract process neighborhood of target_nbrhood PE
-            int tgt_deg = degree_;
+            int tgt_deg = outdegree_;
             MPI_Bcast(&tgt_deg, 1, MPI_INT, target_nbrhood, comm_);
 
             std::vector<int> exl_tgt(tgt_deg+1);
@@ -773,10 +799,10 @@ class Comm
 
     private:
         Graph* g_;
-        GraphElem nghosts_, lnv_;
-        // ghost vertices in target rank
-        std::vector<GraphElem> nghosts_in_target_; 
-        std::unordered_map<int, int> pindex_; 
+        GraphElem in_nghosts_, out_nghosts_, lnv_;
+        // ghost vertices in source/target rank
+        std::vector<GraphElem> nghosts_in_target_, nghosts_in_source_; 
+        std::unordered_map<int, int> target_pindex_, source_pindex_;
 
         char *sbuf_, *rbuf_;
         MPI_Request *sreq_, *rreq_;
@@ -789,8 +815,8 @@ class Comm
             lt_skip_count_, lt_skip_count_large_;
 
         float shrinkp_; // graph shrink percent
-        int rank_, size_, degree_;
-        std::vector<int> targets_;
+        int rank_, size_, indegree_, outdegree_;
+        std::vector<int> targets_, sources_;
         MPI_Comm comm_;
 };
 
