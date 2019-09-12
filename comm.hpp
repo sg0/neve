@@ -284,7 +284,7 @@ class Comm
             {
                 for (GraphElem g = 0; g < nghosts_in_source_[p]; g++)
                 {
-                    MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 101, comm_, rreq_ + rng);
+                    MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], g, comm_, rreq_ + rng);
                     rng++;
                 }
             }
@@ -295,7 +295,7 @@ class Comm
             {
                 for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
                 {
-                    MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 101, comm_, sreq_+ sng);
+                    MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], g, comm_, sreq_+ sng);
                     sng++;
                 }
             }
