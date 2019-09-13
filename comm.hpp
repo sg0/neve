@@ -137,8 +137,8 @@ class Comm
                 } \
             } \
             assert(indegree_ == nghosts_in_source_.size()); \
-            sbuf_ = new char[max_size_]; \
-            rbuf_ = new char[max_size_]; \
+            sbuf_ = new char[out_nghosts_*max_size_]; \
+            rbuf_ = new char[in_nghosts_*max_size_]; \
             assert(in_nghosts_ >= indegree_); \
             assert(out_nghosts_ >= outdegree_); \
             sreq_ = new MPI_Request[out_nghosts_]; \
@@ -233,12 +233,12 @@ class Comm
             delete []rreq_;
         }
 
-        void touch_buffers(GraphElem const& size)
-        {
-            std::memset(sbuf_, 'a', size);
-            std::memset(rbuf_, 'b', size);
-        }
-
+        void touch_send_buffer(GraphElem const& size)
+        { std::memset(sbuf_, 'a', size); }
+        
+        void touch_recv_buffer(GraphElem const& size)
+        { std::memset(rbuf_, 'b', size); }
+        
         // kernel for bandwidth 
         // (extra s/w overhead for determining 
         // owner and accessing CSR)
@@ -247,8 +247,8 @@ class Comm
             // prepost recvs
             for (GraphElem g = 0; g < in_nghosts_; g++)
             {
-                MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[g], 
-                        100, comm_, rreq_ + g);
+                MPI_Irecv(&rbuf_[g*size], size, MPI_CHAR, sources_[g], 
+                        g, comm_, rreq_ + g);
             }
 
             // sends
@@ -264,8 +264,8 @@ class Comm
                     const int owner = g_->get_owner(edge.tail_); 
                     if (owner != rank_)
                     {
-                        MPI_Isend(sbuf_, size, MPI_CHAR, owner, 
-                                100, comm_, sreq_+ ng);
+                        MPI_Isend(&sbuf_[ng*size], size, MPI_CHAR, owner, 
+                                ng, comm_, sreq_+ ng);
                         ng++;
                     }
                 }
@@ -278,24 +278,24 @@ class Comm
         // kernel for bandwidth 
         inline void comm_kernel_bw(GraphElem const& size)
         {
+            GraphElem rng = 0, sng = 0;
+
             // prepost recvs
-            GraphElem rng = 0;
             for (int p = 0; p < indegree_; p++)
             {
                 for (GraphElem g = 0; g < nghosts_in_source_[p]; g++)
                 {
-                    MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], g, comm_, rreq_ + rng);
+                    MPI_Irecv(&rbuf_[p*nghosts_in_source_[p]+g], size, MPI_CHAR, sources_[p], g, comm_, rreq_ + rng);
                     rng++;
                 }
             }
 
             // sends
-            GraphElem sng = 0;
             for (int p = 0; p < outdegree_; p++)
             {
                 for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
                 {
-                    MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], g, comm_, sreq_+ sng);
+                    MPI_Isend(&sbuf_[p*nghosts_in_target_[p]+g], size, MPI_CHAR, targets_[p], g, comm_, sreq_+ sng);
                     sng++;
                 }
             }
@@ -329,7 +329,7 @@ class Comm
             {
                 if (p != me)
                 {
-                    MPI_Irecv(rbuf_, size, MPI_CHAR, p, j, gcomm, rreq_ + j);
+                    MPI_Irecv(rbuf_, size, MPI_CHAR, p, 100, gcomm, rreq_ + j);
                     j++;
                 }
             }
@@ -338,7 +338,7 @@ class Comm
             {
                 if (p != me)
                 {
-                    MPI_Isend(sbuf_, size, MPI_CHAR, p, j, gcomm, sreq_ + j);
+                    MPI_Isend(sbuf_, size, MPI_CHAR, p, 100, gcomm, sreq_ + j);
                     j++;
                 }
             }
@@ -347,7 +347,8 @@ class Comm
             MPI_Waitall(npairs-1, sreq_, MPI_STATUSES_IGNORE);
         }
         
-        // kernel for bandwidth with extra input parameters
+        // kernel for bandwidth with extra input parameters and 
+        // out of order receives
         inline void comm_kernel_bw(GraphElem const& size, GraphElem const& npairs, 
                 MPI_Comm gcomm, GraphElem const& avg_ng, int const& me)
         {
@@ -358,7 +359,7 @@ class Comm
                 {
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
-                        MPI_Irecv(rbuf_, size, MPI_CHAR, MPI_ANY_SOURCE, j, gcomm, rreq_ + j);
+                        MPI_Irecv(&rbuf_[p*avg_ng+g], size, MPI_CHAR, MPI_ANY_SOURCE, j, gcomm, rreq_ + j);
                         j++;
                     }
                 }
@@ -371,7 +372,7 @@ class Comm
                 {
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
-                        MPI_Isend(sbuf_, size, MPI_CHAR, p, j, gcomm, sreq_+ j);
+                        MPI_Isend(&sbuf_[p*avg_ng+g], size, MPI_CHAR, p, j, gcomm, sreq_+ j);
                         j++;
                     }
                 }
@@ -412,7 +413,8 @@ class Comm
             for (GraphElem size = (!min_size_ ? 1 : min_size_); size <= max_size_; size *= 2) 
             {
                 // memset
-                touch_buffers(size);
+                touch_send_buffer(size*out_nghosts_);
+                touch_recv_buffer(size*in_nghosts_);
 
                 if(size > large_msg_size_) 
                 {
@@ -492,7 +494,8 @@ class Comm
 	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
             {       
                 // memset
-                touch_buffers(size);
+                touch_send_buffer(size);
+                touch_recv_buffer(size);
 
                 if (size > large_msg_size_) 
                 {
@@ -623,7 +626,8 @@ class Comm
                 for (GraphElem size = (!min_size_ ? 1 : min_size_); size <= max_size_; size *= 2) 
                 {
                     // memset
-                    touch_buffers(size);
+                    touch_send_buffer(size*avg_ng*tgt_deg);
+                    touch_recv_buffer(size*avg_ng*tgt_deg);
 
                     if(size > large_msg_size_) 
                     {
@@ -743,8 +747,9 @@ class Comm
                 for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
                 {       
                     // memset
-                    touch_buffers(size);
-
+                    touch_send_buffer(size);
+                    touch_recv_buffer(size);
+                    
                     if(size > large_msg_size_) 
                     {
                         loop = lt_loop_count_large_;
