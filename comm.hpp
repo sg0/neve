@@ -247,7 +247,7 @@ class Comm
             // prepost recvs
             for (GraphElem g = 0; g < in_nghosts_; g++)
             {
-                MPI_Irecv(&rbuf_[g*size], size, MPI_CHAR, sources_[g], 
+                MPI_Irecv(&rbuf_[g], size, MPI_CHAR, sources_[g], 
                         g, comm_, rreq_ + g);
             }
 
@@ -264,7 +264,7 @@ class Comm
                     const int owner = g_->get_owner(edge.tail_); 
                     if (owner != rank_)
                     {
-                        MPI_Isend(&sbuf_[ng*size], size, MPI_CHAR, owner, 
+                        MPI_Isend(&sbuf_[ng], size, MPI_CHAR, owner, 
                                 ng, comm_, sreq_+ ng);
                         ng++;
                     }
@@ -285,7 +285,7 @@ class Comm
             {
                 for (GraphElem g = 0; g < nghosts_in_source_[p]; g++)
                 {
-                    MPI_Irecv(&rbuf_[p*nghosts_in_source_[p]+g], size, MPI_CHAR, sources_[p], g, comm_, rreq_ + rng);
+                    MPI_Irecv(&rbuf_[rng], size, MPI_CHAR, sources_[p], g, comm_, rreq_ + rng);
                     rng++;
                 }
             }
@@ -295,7 +295,7 @@ class Comm
             {
                 for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
                 {
-                    MPI_Isend(&sbuf_[p*nghosts_in_target_[p]+g], size, MPI_CHAR, targets_[p], g, comm_, sreq_+ sng);
+                    MPI_Isend(&sbuf_[sng], size, MPI_CHAR, targets_[p], g, comm_, sreq_+ sng);
                     sng++;
                 }
             }
@@ -359,7 +359,7 @@ class Comm
                 {
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
-                        MPI_Irecv(&rbuf_[p*avg_ng+g], size, MPI_CHAR, MPI_ANY_SOURCE, j, gcomm, rreq_ + j);
+                        MPI_Irecv(&rbuf_[j], size, MPI_CHAR, MPI_ANY_SOURCE, j, gcomm, rreq_ + j);
                         j++;
                     }
                 }
@@ -372,7 +372,7 @@ class Comm
                 {
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
-                        MPI_Isend(&sbuf_[p*avg_ng+g], size, MPI_CHAR, p, j, gcomm, sreq_+ j);
+                        MPI_Isend(&sbuf_[j], size, MPI_CHAR, p, j, gcomm, sreq_+ j);
                         j++;
                     }
                 }
