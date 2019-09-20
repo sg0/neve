@@ -47,6 +47,10 @@
 #include <cstring>
 #include <iomanip>
 
+#if defined(SCOREP_USER_ENABLE)
+#include <scorep/SCOREP_User.h>
+#endif
+
 #define MAX_SIZE                (1<<22)
 #define MIN_SIZE                (0)
 #define LARGE_SIZE              8192
@@ -424,6 +428,9 @@ class Comm
     
                 MPI_Barrier(comm_);
 
+#if defined(SCOREP_USER_ENABLE)
+	        SCOREP_RECORDING_ON();
+#endif
                 // time communication kernel
                 for (int l = 0; l < loop + skip; l++) 
                 {           
@@ -436,6 +443,11 @@ class Comm
                     comm_kernel_bw(size);
                 }   
 
+		MPI_Barrier(comm_);
+
+#if defined(SCOREP_USER_ENABLE)
+		SCOREP_RECORDING_OFF();
+#endif
                 t_end = MPI_Wtime();
                 t = t_end - t_start;
 
@@ -505,6 +517,9 @@ class Comm
                         
                 MPI_Barrier(comm_);
 
+#if defined(SCOREP_USER_ENABLE)
+	        SCOREP_RECORDING_ON();
+#endif
                 // time communication kernel
                 for (int l = 0; l < loop + skip; l++) 
                 {           
@@ -515,8 +530,13 @@ class Comm
                     }
                     
                     comm_kernel_lt(size);
-                    MPI_Barrier(comm_);
-                } 
+                }
+
+		MPI_Barrier(comm_);
+
+#if defined(SCOREP_USER_ENABLE)
+		SCOREP_RECORDING_OFF();
+#endif
 
                 t_end = MPI_Wtime();
                 t = (t_end - t_start); 
