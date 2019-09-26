@@ -399,6 +399,7 @@ class Comm
                     << std::setw(18) << "Variance" 
                     << std::setw(15) << "STDDEV" 
                     << std::setw(16) << "95% CI" 
+                    << std::setw(16) << "TEPS" 
                     << std::endl;
             }
 
@@ -455,6 +456,7 @@ class Comm
                         << std::setw(18) << var
                         << std::setw(16) << stddev 
                         << std::setw(16) << stddev * ZCI / sqrt((double)(loop * avg_ng)) 
+                        << std::setw(16) << sum_ng / sum_t
                         << std::endl;
                 }
             }
