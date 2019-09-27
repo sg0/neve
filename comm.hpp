@@ -468,7 +468,7 @@ class Comm
                         << std::setw(18) << var
                         << std::setw(16) << stddev 
                         << std::setw(16) << stddev * ZCI / sqrt((double)(loop * avg_ng)) 
-                        << std::setw(16) << sum_ng / sum_t
+                        << std::setw(16) << (loop * sum_ng) / sum_t
                         << std::endl;
                 }
             }
