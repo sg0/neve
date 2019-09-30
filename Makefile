@@ -8,13 +8,14 @@ SNTFLAGS = -std=c++11 -fsanitize=address -O1 -fno-omit-frame-pointer
 CXXFLAGS = -std=c++11 -g $(OPTFLAGS)
 
 ENABLE_DUMPI_TRACE=0
-ENABLE_SCOREP_TRACE=0
+ENABLE_SCOREP_TRACE=1
 
 ifeq ($(ENABLE_DUMPI_TRACE),1)
 	TRACERPATH = $(HOME)/builds/sst-dumpi/lib 
 	LDFLAGS = -L$(TRACERPATH) -ldumpi
 else ifeq ($(ENABLE_SCOREP_TRACE),1)
 	SCOREP_INSTALL_PATH = /usr/common/software/scorep/6.0/intel
+	CXXFLAGS += -DSCOREP_USER_ENABLE
 	INCLUDE = -I$(SCOREP_INSTALL_PATH)/include -I$(SCOREP_INSTALL_PATH)/include/scorep -DSCOREP_USER_ENABLE
 	LDAPP = $(SCOREP_INSTALL_PATH)/bin/scorep --user --nocompiler --noopenmp --nopomp --nocuda --noopenacc --noopencl --nomemory
 endif
