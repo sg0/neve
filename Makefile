@@ -1,4 +1,4 @@
-CXX = CC
+CXX = mpicc
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
 OPTFLAGS = -O3 -xHost -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
 # -DPRINT_EXTRA_NEDGES prints extra edges when -p <> is passed to 
@@ -8,7 +8,7 @@ SNTFLAGS = -std=c++11 -fsanitize=address -O1 -fno-omit-frame-pointer
 CXXFLAGS = -std=c++11 -g $(OPTFLAGS)
 
 ENABLE_DUMPI_TRACE=0
-ENABLE_SCOREP_TRACE=1
+ENABLE_SCOREP_TRACE=0
 
 ifeq ($(ENABLE_DUMPI_TRACE),1)
 	TRACERPATH = $(HOME)/builds/sst-dumpi/lib 
