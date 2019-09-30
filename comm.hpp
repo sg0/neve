@@ -511,6 +511,9 @@ class Comm
 
 #if defined(SCOREP_USER_ENABLE)
 	        SCOREP_RECORDING_ON();
+		SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_Loop", SCOREP_USER_REGION_TYPE_COMMON);
+		if (rank_ == 0)
+			SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_WallTime_MainLoop", SCOREP_USER_REGION_TYPE_COMMON);
 #endif
                 // time communication kernel
                 for (int l = 0; l < loop + skip; l++) 
@@ -524,11 +527,14 @@ class Comm
                     comm_kernel_lt(size);
                 }
 
-		MPI_Barrier(comm_);
-
 #if defined(SCOREP_USER_ENABLE)
-		SCOREP_RECORDING_OFF();
+		  if (rank_ == 0)
+			  SCOREP_USER_REGION_BY_NAME_END("TRACER_WallTime_MainLoop");
+		  
+		  SCOREP_USER_REGION_BY_NAME_END("TRACER_Loop");
+		  SCOREP_RECORDING_OFF();
 #endif
+		MPI_Barrier(comm_);
 
                 t_end = MPI_Wtime();
                 t = (t_end - t_start); 

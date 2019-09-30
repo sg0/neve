@@ -80,6 +80,9 @@ int main(int argc, char *argv[])
     double t0, t1, td, td0, td1;
 
     MPI_Init(&argc, &argv);
+#if defined(SCOREP_USER_ENABLE)
+    SCOREP_RECORDING_OFF();
+#endif
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &me);
 
