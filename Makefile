@@ -1,4 +1,4 @@
-CXX = mpicc
+CXX = mpicxx
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
 OPTFLAGS = -O3 -xHost -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
 # -DPRINT_EXTRA_NEDGES prints extra edges when -p <> is passed to 
