@@ -398,9 +398,8 @@ class Comm
             avg_ng = sum_ng / size_;
 
             // total communicating pairs
-            int tot_npairs = outdegree_ + indegree_, sum_npairs = 0;
+            int tot_npairs = outdegree_, sum_npairs = 0;
             MPI_Reduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
-	    sum_npairs /= 2;
             
             if(rank_ == 0) 
             {
@@ -462,11 +461,10 @@ class Comm
 
                 if (rank_ == 0) 
                 {
-                    double tmp = size / 1e6 * sum_npairs;
+		    double tmp = size / 1e6 * loop * avg_ng;
                     sum_t /= sum_npairs;
-	            tmp = tmp * loop * avg_ng;
                     double bw = tmp / sum_t;
-        
+
                     std::cout << std::setw(10) << size << std::setw(15) << bw 
                         << std::setw(15) << 1e6 * bw / size
                         << std::setw(18) << var
