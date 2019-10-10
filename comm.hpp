@@ -147,7 +147,15 @@ class Comm
             assert(out_nghosts_ >= outdegree_); \
             sreq_ = new MPI_Request[out_nghosts_]; \
             rreq_ = new MPI_Request[in_nghosts_]; \
-            a2a_send_dat.clear(); \
+            /* for large graphs, if iteration counts are not reduced it takes >> time */\
+	    /* if (lne > 1000) */\
+            /*{ */\
+            /*    if (bw_loop_count_ == BW_LOOP_COUNT) */\
+            /*        bw_loop_count_ = bw_loop_count_large_; */\
+            /*    if (bw_skip_count_ == BW_SKIP_COUNT) */\
+            /*        bw_skip_count_ = bw_skip_count_large_; */\
+            /*} */\
+	    a2a_send_dat.clear(); \
             a2a_recv_dat.clear(); \
         } while(0)
 
@@ -270,8 +278,51 @@ class Comm
             MPI_Waitall(in_nghosts_, rreq_, MPI_STATUSES_IGNORE);
             MPI_Waitall(out_nghosts_, sreq_, MPI_STATUSES_IGNORE);
         }
+       
+        // kernel for latency
+        inline void comm_kernel_lt(GraphElem const& size)
+	{
+	    for (int p = 0; p < indegree_; p++)
+	    {
+		MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
+	    }
 
-        // kernel for bandwidth 
+	    for (int p = 0; p < outdegree_; p++)
+	    {
+		MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
+	    }
+
+            MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+        }
+
+        // kernel for latency with extra input parameters
+        inline void comm_kernel_lt(GraphElem const& size, GraphElem const& npairs, 
+                MPI_Comm gcomm, int const& me)
+        { 
+            for (int p = 0, j = 0; p < npairs; p++)
+            {
+                if (p != me)
+                {
+                    MPI_Irecv(rbuf_, size, MPI_CHAR, p, 100, gcomm, rreq_ + j);
+                    j++;
+                }
+            }
+
+            for (int p = 0, j = 0; p < npairs; p++)
+            {
+                if (p != me)
+                {
+                    MPI_Isend(sbuf_, size, MPI_CHAR, p, 100, gcomm, sreq_ + j);
+                    j++;
+                }
+            }
+
+            MPI_Waitall(npairs-1, rreq_, MPI_STATUSES_IGNORE);
+            MPI_Waitall(npairs-1, sreq_, MPI_STATUSES_IGNORE);
+        }
+         
+	// kernel for bandwidth 
         inline void comm_kernel_bw(GraphElem const& size)
         {
             GraphElem rng = 0, sng = 0;
@@ -298,49 +349,6 @@ class Comm
 
             MPI_Waitall(in_nghosts_, rreq_, MPI_STATUSES_IGNORE);
             MPI_Waitall(out_nghosts_, sreq_, MPI_STATUSES_IGNORE);
-        }
-        
-        // kernel for latency
-        inline void comm_kernel_lt(GraphElem const& size)
-	{
-	    for (int p = 0; p < indegree_; p++)
-	    {
-		MPI_Irecv(&rbuf_[p*max_size_], size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
-	    }
-
-	    for (int p = 0; p < outdegree_; p++)
-	    {
-		MPI_Isend(&sbuf_[p*max_size_], size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
-	    }
-
-            MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
-            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
-        }
-
-        // kernel for latency with extra input parameters
-        inline void comm_kernel_lt(GraphElem const& size, GraphElem const& npairs, 
-                MPI_Comm gcomm, int const& me)
-        { 
-            for (int p = 0, j = 0; p < npairs; p++)
-            {
-                if (p != me)
-                {
-                    MPI_Irecv(&rbuf_[j*max_size_], size, MPI_CHAR, p, 100, gcomm, rreq_ + j);
-                    j++;
-                }
-            }
-
-            for (int p = 0, j = 0; p < npairs; p++)
-            {
-                if (p != me)
-                {
-                    MPI_Isend(&sbuf_[j*max_size_], size, MPI_CHAR, p, 100, gcomm, sreq_ + j);
-                    j++;
-                }
-            }
-
-            MPI_Waitall(npairs-1, rreq_, MPI_STATUSES_IGNORE);
-            MPI_Waitall(npairs-1, sreq_, MPI_STATUSES_IGNORE);
         }
         
         // kernel for bandwidth with extra input parameters and 
@@ -390,8 +398,8 @@ class Comm
             avg_ng = sum_ng / size_;
 
             // total communicating pairs
-            int sum_npairs = 0;
-            MPI_Reduce(&outdegree_, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
+            int tot_npairs = outdegree_ + indegree_, sum_npairs = 0;
+            MPI_Reduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_MAX, 0, comm_);
             
             if(rank_ == 0) 
             {
@@ -418,8 +426,6 @@ class Comm
                     skip = bw_skip_count_large_;
                 }
     
-                MPI_Barrier(comm_);
-
 #if defined(SCOREP_USER_ENABLE)
 	        SCOREP_RECORDING_ON();
 #endif
@@ -434,8 +440,6 @@ class Comm
 
                     comm_kernel_bw(size);
                 }   
-
-		MPI_Barrier(comm_);
 
 #if defined(SCOREP_USER_ENABLE)
 		SCOREP_RECORDING_OFF();
@@ -455,14 +459,13 @@ class Comm
                 double var = avg_tsq - (avg_t*avg_t);
                 double stddev = sqrt(var);
 
-                MPI_Barrier(comm_);
-                
                 if (rank_ == 0) 
                 {
-                    double tmp = size / 1e6 * loop * avg_ng;
+                    double tmp = size / 1e6 * sum_npairs;
                     sum_t /= sum_npairs;
+	            tmp = tmp * loop * avg_ng;
                     double bw = tmp / sum_t;
-
+        
                     std::cout << std::setw(10) << size << std::setw(15) << bw 
                         << std::setw(15) << 1e6 * bw / size
                         << std::setw(18) << var
@@ -481,8 +484,8 @@ class Comm
             int loop = lt_loop_count_, skip = lt_skip_count_;
             
             // total communicating pairs
-            int sum_npairs = 0;
-            MPI_Reduce(&outdegree_, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
+            int tot_npairs = outdegree_ + indegree_, sum_npairs = 0;
+            MPI_Reduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
 
             if(rank_ == 0) 
             {
@@ -498,8 +501,7 @@ class Comm
 
 	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
             {       
-                // memset
-                touch_buffers();
+                MPI_Barrier(comm_);
 
                 if (size > large_msg_size_) 
                 {
@@ -507,8 +509,6 @@ class Comm
                     skip = lt_skip_count_large_;
                 }
                         
-                MPI_Barrier(comm_);
-
 #if defined(SCOREP_USER_ENABLE)
 	        SCOREP_RECORDING_ON();
 		SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_Loop", SCOREP_USER_REGION_TYPE_COMMON);
@@ -534,10 +534,8 @@ class Comm
 		  SCOREP_USER_REGION_BY_NAME_END("TRACER_Loop");
 		  SCOREP_RECORDING_OFF();
 #endif
-		MPI_Barrier(comm_);
-
                 t_end = MPI_Wtime();
-                t = (t_end - t_start); 
+                t = (t_end - t_start) * 1.0e6 / loop; 
 
                 // execution time stats
                 MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
@@ -545,15 +543,11 @@ class Comm
                 double sum_tsq = 0;
                 MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
+		double avg_t = sum_t / (double)sum_npairs;
                 double avg_st = sum_t / (double) size_;
-                double avg_tsq   = sum_tsq / (double) size_;
+                double avg_tsq = sum_tsq / (double) size_;
                 double var = avg_tsq - (avg_st*avg_st);
                 double stddev  = sqrt(var);
-                
-                sum_t *= 1.0e6 / loop;
-                double avg_t = sum_t / (double)sum_npairs;
-                
-                MPI_Barrier(comm_);
                 
                 if (rank_ == 0) 
                 {
@@ -652,8 +646,6 @@ class Comm
                         skip = bw_skip_count_large_;
                     }
 
-                    MPI_Barrier(nbr_comm);
-
                     // time communication kernel
                     for (int l = 0; l < loop + skip; l++) 
                     {           
@@ -680,8 +672,6 @@ class Comm
                     double avg_tsq   = sum_tsq / tgt_size;
                     double var = avg_tsq - (avg_t*avg_t);
                     double stddev  = sqrt(var);
-
-                    MPI_Barrier(nbr_comm);
 
                     if (tgt_rank == 0) 
                     {            
@@ -720,8 +710,8 @@ class Comm
             assert(target_nbrhood < size_);
 
             // total communicating pairs
-            int sum_npairs = outdegree_;
-            MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
+            int tot_npairs = outdegree_ + indegree_, sum_npairs = 0;
+            MPI_Allreduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_MAX, comm_);
 
             // extract process neighborhood of target_nbrhood PE
             int tgt_deg = outdegree_;
@@ -763,8 +753,7 @@ class Comm
             {
                 for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
                 {       
-                    // memset
-                    touch_buffers();
+                    MPI_Barrier(nbr_comm);
                     
                     if(size > large_msg_size_) 
                     {
@@ -772,15 +761,13 @@ class Comm
                         skip = lt_skip_count_large_;
                     }
 
-                    MPI_Barrier(nbr_comm);
-
                     // time communication kernel
                     for (int l = 0; l < loop + skip; l++) 
                     {           
                         if (l == skip)
                         {
                             t_start = MPI_Wtime();
-                            MPI_Barrier(nbr_comm);
+			    MPI_Barrier(nbr_comm);
                         }
                         
                         comm_kernel_lt(size, tgt_deg+1, nbr_comm, tgt_rank);
@@ -804,8 +791,6 @@ class Comm
                     sum_t *= 1.0e6 / (double)(loop*2.0);
                     double avg_t = sum_t / (double)(tgt_size*2.0);
                     
-                    MPI_Barrier(nbr_comm);
-
                     if (tgt_rank == 0) 
                     {
                         std::cout << std::setw(10) << size << std::setw(17) << avg_t
