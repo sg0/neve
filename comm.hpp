@@ -399,7 +399,8 @@ class Comm
 
             // total communicating pairs
             int tot_npairs = outdegree_ + indegree_, sum_npairs = 0;
-            MPI_Reduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_MAX, 0, comm_);
+            MPI_Reduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
+	    sum_npairs /= 2;
             
             if(rank_ == 0) 
             {
@@ -486,6 +487,7 @@ class Comm
             // total communicating pairs
             int tot_npairs = outdegree_ + indegree_, sum_npairs = 0;
             MPI_Reduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
+	    sum_npairs /= 2;
 
             if(rank_ == 0) 
             {
@@ -507,7 +509,8 @@ class Comm
                 {
                     loop = lt_loop_count_large_;
                     skip = lt_skip_count_large_;
-                }
+		}
+                
                         
 #if defined(SCOREP_USER_ENABLE)
 	        SCOREP_RECORDING_ON();
@@ -711,7 +714,8 @@ class Comm
 
             // total communicating pairs
             int tot_npairs = outdegree_ + indegree_, sum_npairs = 0;
-            MPI_Allreduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_MAX, comm_);
+            MPI_Allreduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
+	    sum_npairs /= 2;
 
             // extract process neighborhood of target_nbrhood PE
             int tgt_deg = outdegree_;
