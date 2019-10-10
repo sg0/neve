@@ -148,13 +148,13 @@ class Comm
             sreq_ = new MPI_Request[out_nghosts_]; \
             rreq_ = new MPI_Request[in_nghosts_]; \
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
-	    /* if (lne > 1000) */\
-            /*{ */\
-            /*    if (bw_loop_count_ == BW_LOOP_COUNT) */\
-            /*        bw_loop_count_ = bw_loop_count_large_; */\
-            /*    if (bw_skip_count_ == BW_SKIP_COUNT) */\
-            /*        bw_skip_count_ = bw_skip_count_large_; */\
-            /*} */\
+	    if (lne > 1000) \
+            { \
+                if (bw_loop_count_ == BW_LOOP_COUNT) \
+                    bw_loop_count_ = bw_loop_count_large_; \
+                if (bw_skip_count_ == BW_SKIP_COUNT) \
+                    bw_skip_count_ = bw_skip_count_large_; \
+            } \
 	    a2a_send_dat.clear(); \
             a2a_recv_dat.clear(); \
         } while(0)
@@ -392,15 +392,16 @@ class Comm
             double t, t_start, t_end, sum_t = 0.0;
             int loop = bw_loop_count_, skip = bw_skip_count_;
             
-            // find average number of ghost vertices
-            GraphElem sum_ng = 0, avg_ng;
-            MPI_Reduce(&out_nghosts_, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
-            avg_ng = sum_ng / size_;
-
             // total communicating pairs
-            int tot_npairs = outdegree_, sum_npairs = 0;
-            MPI_Reduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
-            
+            int sum_npairs = outdegree_ + indegree_;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
+            sum_npairs /= 2;
+             
+            // find average number of ghost vertices
+            GraphElem sum_ng = out_nghosts_, avg_ng;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
+            avg_ng = sum_ng / sum_npairs;
+           
             if(rank_ == 0) 
             {
                 std::cout << "--------------------------------" << std::endl;
@@ -411,7 +412,6 @@ class Comm
                     << std::setw(18) << "Variance" 
                     << std::setw(15) << "STDDEV" 
                     << std::setw(16) << "95% CI" 
-                    << std::setw(16) << "TEPS" 
                     << std::endl;
             }
 
@@ -450,12 +450,12 @@ class Comm
                 // execution time stats
                 MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
-                double avg_t = sum_t / size_;
+                double avg_t = sum_t / sum_npairs;
                 double t_sq = t*t;
                 double sum_tsq = 0;
                 MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
-                double avg_tsq = sum_tsq / size_;
+                double avg_tsq = sum_tsq / sum_npairs;
                 double var = avg_tsq - (avg_t*avg_t);
                 double stddev = sqrt(var);
 
@@ -470,7 +470,6 @@ class Comm
                         << std::setw(18) << var
                         << std::setw(16) << stddev 
                         << std::setw(16) << stddev * ZCI / sqrt((double)(loop * avg_ng)) 
-                        << std::setw(16) << (loop * sum_ng) / sum_t
                         << std::endl;
                 }
             }
@@ -483,8 +482,8 @@ class Comm
             int loop = lt_loop_count_, skip = lt_skip_count_;
             
             // total communicating pairs
-            int tot_npairs = outdegree_ + indegree_, sum_npairs = 0;
-            MPI_Reduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_SUM, 0, comm_);
+            int sum_npairs = outdegree_ + indegree_;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
 	    sum_npairs /= 2;
 
             if(rank_ == 0) 
@@ -493,6 +492,7 @@ class Comm
                 std::cout << "----------Latency test----------" << std::endl;
                 std::cout << "--------------------------------" << std::endl;
                 std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
+                    << std::setw(16) << "TLat(us)" 
                     << std::setw(16) << "Variance" 
                     << std::setw(15) << "STDDEV" 
                     << std::setw(16) << "95% CI" 
@@ -545,14 +545,17 @@ class Comm
                 MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
 		double avg_t = sum_t / (double)sum_npairs;
-                double avg_st = sum_t / (double) size_;
-                double avg_tsq = sum_tsq / (double) size_;
-                double var = avg_tsq - (avg_st*avg_st);
+                double avg_tsq = sum_tsq / (double) sum_npairs;
+                double var = avg_tsq - (avg_t*avg_t);
                 double stddev  = sqrt(var);
+                
+                double avg_lt = 0;
+                MPI_Reduce(&avg_t, &avg_lt, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
                 
                 if (rank_ == 0) 
                 {
                     std::cout << std::setw(10) << size << std::setw(17) << avg_t
+                        << std::setw(16) << avg_lt
                         << std::setw(16) << var
                         << std::setw(16) << stddev 
                         << std::setw(16) << stddev * ZCI / sqrt(loop) 
@@ -570,20 +573,6 @@ class Comm
             double t, t_start, t_end, sum_t = 0.0;
             int loop = bw_loop_count_, skip = bw_skip_count_;
             assert(target_nbrhood < size_);
-             
-            // find average number of ghost vertices
-            GraphElem avg_ng, sum_ng = out_nghosts_;
-            MPI_Allreduce(MPI_IN_PLACE, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
-            avg_ng = sum_ng / size_;
-            
-            if (max_ng > 0)
-            {
-                avg_ng = std::min(avg_ng, max_ng);
-                if (rank_ == 0)
-                {
-                    std::cout << "Number of ghost vertices set as: " << avg_ng << std::endl;
-                }
-            }
 
             // extract process neighborhood of target_nbrhood PE
             int tgt_deg = outdegree_;
@@ -625,6 +614,21 @@ class Comm
             // chosen process neighborhood 
             if (tgt_rank != MPI_UNDEFINED)
             {
+                // find average number of ghost vertices
+                GraphElem avg_ng, sum_ng = out_nghosts_;
+                MPI_Allreduce(MPI_IN_PLACE, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
+                avg_ng = sum_ng / tgt_deg; // number of pairs
+
+                // override computed avg_ng
+                if (max_ng > 0)
+                {
+                    avg_ng = std::min(avg_ng, max_ng);
+                    if (rank_ == 0)
+                    {
+                        std::cout << "Number of ghost vertices set as: " << avg_ng << std::endl;
+                    }
+                }
+
                 // readjust request buffer sizes and counts
                 delete []sreq_;
                 delete []rreq_;
@@ -670,21 +674,21 @@ class Comm
                     double sum_tsq = 0;
                     MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, nbr_comm);
 
-                    double avg_tsq   = sum_tsq / tgt_size;
+                    double avg_tsq = sum_tsq / tgt_size;
                     double var = avg_tsq - (avg_t*avg_t);
                     double stddev  = sqrt(var);
 
                     if (tgt_rank == 0) 
                     {            
-                        double tmp = size / 1e6 * loop * avg_ng * 2.0;
-                        sum_t /= (tgt_size * 2.0);
+                        double tmp = size / 1e6 * loop * avg_ng;
+                        sum_t /= tgt_size;
                         double bw = tmp / sum_t;
                     
                         std::cout << std::setw(10) << size << std::setw(15) << bw 
                             << std::setw(15) << 1e6 * bw / size
                             << std::setw(18) << var
                             << std::setw(16) << stddev 
-                            << std::setw(16) << stddev * ZCI / sqrt((double)(loop * avg_ng * 2.0)) 
+                            << std::setw(16) << stddev * ZCI / sqrt((double)(loop * avg_ng)) 
                             << std::endl;
                     }
                 }
@@ -709,11 +713,6 @@ class Comm
             int tgt_rank = MPI_UNDEFINED, tgt_size = 0;
             
             assert(target_nbrhood < size_);
-
-            // total communicating pairs
-            int tot_npairs = outdegree_ + indegree_, sum_npairs = 0;
-            MPI_Allreduce(&tot_npairs, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
-	    sum_npairs /= 2;
 
             // extract process neighborhood of target_nbrhood PE
             int tgt_deg = outdegree_;
@@ -743,6 +742,7 @@ class Comm
                 std::cout << "----Latency test (single neighborhood)----" << std::endl;
                 std::cout << "------------------------------------------" << std::endl;
                 std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
+                    << std::setw(16) << "TLat" 
                     << std::setw(16) << "Variance" 
                     << std::setw(15) << "STDDEV" 
                     << std::setw(16) << "95% CI" 
@@ -776,26 +776,26 @@ class Comm
                     }   
 
                     t_end = MPI_Wtime();
-                    t = (t_end - t_start);
+                    t = (t_end - t_start) * 1.0e6 / (2.0 * loop); 
 
                     // execution time stats
                     MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, nbr_comm);
-
                     double t_sq = t*t;
                     double sum_tsq = 0;
                     MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, nbr_comm);
 
-                    double avg_st = sum_t / tgt_size;
-                    double avg_tsq   = sum_tsq / tgt_size;
-                    double var = avg_tsq - (avg_st*avg_st);
+                    double avg_t = sum_t / (double)(2.0*tgt_deg);
+                    double avg_tsq = sum_tsq / (double)(2.0*tgt_deg);
+                    double var = avg_tsq - (avg_t*avg_t);
                     double stddev  = sqrt(var);
 
-                    sum_t *= 1.0e6 / (double)(loop*2.0);
-                    double avg_t = sum_t / (double)(tgt_size*2.0);
-                    
+                    double avg_lt = 0;
+                    MPI_Reduce(&avg_t, &avg_lt, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
+
                     if (tgt_rank == 0) 
                     {
                         std::cout << std::setw(10) << size << std::setw(17) << avg_t
+                            << std::setw(16) << avg_lt
                             << std::setw(16) << var
                             << std::setw(16) << stddev 
                             << std::setw(16) << stddev * ZCI / sqrt(loop * 2.0) 
