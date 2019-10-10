@@ -64,6 +64,7 @@ static long minSizeExchange = 0;
 static long maxSizeExchange = 0;
 static long maxNumGhosts = 0;
 static bool readBalanced = false;
+static bool hardSkip = false;
 static bool randomNumberLCG = false;
 static bool performBWTest = false;
 static bool performLTTest = false;
@@ -171,7 +172,12 @@ int main(int argc, char *argv[])
                 c.p2p_bw_snbr(processNbr);
         }
         else
-            c.p2p_bw();
+        {
+            if (hardSkip)
+                c.p2p_bw_hardskip();
+            else
+                c.p2p_bw();
+        }
     }
 
     // latency test
@@ -211,7 +217,7 @@ void parseCommandLine(const int argc, char * const argv[])
 {
   int ret;
 
-  while ((ret = getopt(argc, argv, "f:r:n:lp:m:x:bg:wts:z:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:wts:z:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -247,6 +253,9 @@ void parseCommandLine(const int argc, char * const argv[])
       break;
     case 't':
       performLTTest = true;
+      break;
+    case 'h':
+      hardSkip = true;
       break;
     case 's':
       chooseSingleNbr = true;
@@ -290,6 +299,11 @@ void parseCommandLine(const int argc, char * const argv[])
   if (me == 0 && shrinkGraph && performLTTest)
   {
 	  std::cout << "Graph shrinking is ONLY valid for bandwidth test, NOT latency test which just performs message exchanges across the process neighborhood of a graph." << std::endl;	  
+  }
+
+  if (me == 0 && performLTTest && hardSkip)
+  {
+      std::cout << "The hard skip option to disable warmup and extra communication loops only affects the bandwidth test." << std::endl;
   }
 
   // errors

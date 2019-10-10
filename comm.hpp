@@ -386,7 +386,7 @@ class Comm
             MPI_Waitall(avg_ng*(npairs-1), sreq_, MPI_STATUSES_IGNORE);
         }
 
-        // Bandwidth test
+        // Bandwidth tests
         void p2p_bw()
         {
             double t, t_start, t_end, sum_t = 0.0;
@@ -475,6 +475,76 @@ class Comm
             }
         }
          
+        // no extra loop, just communication among ghosts
+        void p2p_bw_hardskip()
+        {
+            double t, t_start, t_end, sum_t = 0.0;
+            
+            // total communicating pairs
+            int sum_npairs = outdegree_ + indegree_;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
+            sum_npairs /= 2;
+             
+            // find average number of ghost vertices
+            GraphElem sum_ng = out_nghosts_, avg_ng;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
+            avg_ng = sum_ng / sum_npairs;
+           
+            if(rank_ == 0) 
+            {
+                std::cout << "--------------------------------" << std::endl;
+                std::cout << "--------Bandwidth test----------" << std::endl;
+                std::cout << "--------------------------------" << std::endl;
+                std::cout << std::setw(12) << "# Bytes" << std::setw(13) << "MB/s" 
+                    << std::setw(13) << "Msg/s" 
+                    << std::setw(18) << "Variance" 
+                    << std::setw(15) << "STDDEV" 
+                    << std::setw(16) << "95% CI" 
+                    << std::endl;
+            }
+
+            for (GraphElem size = (!min_size_ ? 1 : min_size_); size <= max_size_; size *= 2) 
+            {
+                // memset
+                touch_buffers();
+
+                MPI_Barrier(comm_);
+
+                t_start = MPI_Wtime();
+
+                comm_kernel_bw(size);
+
+                t_end = MPI_Wtime();
+                t = t_end - t_start;
+
+                // execution time stats
+                MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
+
+                double avg_t = sum_t / sum_npairs;
+                double t_sq = t*t;
+                double sum_tsq = 0;
+                MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
+
+                double avg_tsq = sum_tsq / sum_npairs;
+                double var = avg_tsq - (avg_t*avg_t);
+                double stddev = sqrt(var);
+
+                if (rank_ == 0) 
+                {
+		    double tmp = size / 1e6 * avg_ng;
+                    sum_t /= sum_npairs;
+                    double bw = tmp / sum_t;
+
+                    std::cout << std::setw(10) << size << std::setw(15) << bw 
+                        << std::setw(15) << 1e6 * bw / size
+                        << std::setw(18) << var
+                        << std::setw(16) << stddev 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)(avg_ng)) 
+                        << std::endl;
+                }
+            }
+        }
+        
         // Latency test
         void p2p_lt()
         {
