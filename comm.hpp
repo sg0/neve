@@ -609,7 +609,7 @@ class Comm
                 t = (t_end - t_start) * 1.0e6 / loop; 
 
                 // execution time stats
-                MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
+                MPI_Allreduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, comm_);
                 double t_sq = t*t;
                 double sum_tsq = 0;
                 MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
@@ -849,7 +849,7 @@ class Comm
                     t = (t_end - t_start) * 1.0e6 / (2.0 * loop); 
 
                     // execution time stats
-                    MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, nbr_comm);
+                    MPI_Allreduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, nbr_comm);
                     double t_sq = t*t;
                     double sum_tsq = 0;
                     MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, nbr_comm);
