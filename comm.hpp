@@ -237,10 +237,10 @@ class Comm
             delete []rreq_;
         }
 
-        void touch_buffers()
+        void touch_buffers(GraphElem const& size)
         { 
-            std::memset(sbuf_, 'a', out_nghosts_*max_size_); 
-            std::memset(rbuf_, 'b', in_nghosts_*max_size_); 
+            std::memset(sbuf_, 'a', out_nghosts_*size); 
+            std::memset(rbuf_, 'b', in_nghosts_*size); 
         }
         
         // kernel for bandwidth 
@@ -251,7 +251,7 @@ class Comm
             // prepost recvs
             for (GraphElem g = 0; g < in_nghosts_; g++)
             {
-                MPI_Irecv(&rbuf_[g*max_size_], size, MPI_CHAR, sources_[g], 
+                MPI_Irecv(&rbuf_[g*size], size, MPI_CHAR, sources_[g], 
                         g, comm_, rreq_ + g);
             }
 
@@ -268,7 +268,7 @@ class Comm
                     const int owner = g_->get_owner(edge.tail_); 
                     if (owner != rank_)
                     {
-                        MPI_Isend(&sbuf_[ng*max_size_], size, MPI_CHAR, owner, 
+                        MPI_Isend(&sbuf_[ng*size], size, MPI_CHAR, owner, 
                                 ng, comm_, sreq_+ ng);
                         ng++;
                     }
@@ -332,7 +332,7 @@ class Comm
             {
                 for (GraphElem g = 0; g < nghosts_in_source_[p]; g++)
                 {
-                    MPI_Irecv(&rbuf_[rng*max_size_], size, MPI_CHAR, sources_[p], g, comm_, rreq_ + rng);
+                    MPI_Irecv(&rbuf_[rng*size], size, MPI_CHAR, sources_[p], g, comm_, rreq_ + rng);
                     rng++;
                 }
             }
@@ -342,7 +342,7 @@ class Comm
             {
                 for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
                 {
-                    MPI_Isend(&sbuf_[sng*max_size_], size, MPI_CHAR, targets_[p], g, comm_, sreq_+ sng);
+                    MPI_Isend(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], g, comm_, sreq_+ sng);
                     sng++;
                 }
             }
@@ -363,7 +363,7 @@ class Comm
                 {
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
-                        MPI_Irecv(&rbuf_[j*max_size_], size, MPI_CHAR, MPI_ANY_SOURCE, j, gcomm, rreq_ + j);
+                        MPI_Irecv(&rbuf_[j*size], size, MPI_CHAR, MPI_ANY_SOURCE, j, gcomm, rreq_ + j);
                         j++;
                     }
                 }
@@ -376,7 +376,7 @@ class Comm
                 {
                     for (GraphElem g = 0; g < avg_ng; g++)
                     {
-                        MPI_Isend(&sbuf_[j*max_size_], size, MPI_CHAR, p, j, gcomm, sreq_+ j);
+                        MPI_Isend(&sbuf_[j*size], size, MPI_CHAR, p, j, gcomm, sreq_+ j);
                         j++;
                     }
                 }
@@ -398,7 +398,7 @@ class Comm
             sum_npairs /= 2;
              
             // find average number of ghost vertices
-            GraphElem sum_ng = out_nghosts_, avg_ng;
+            GraphElem sum_ng = out_nghosts_ + in_nghosts_, avg_ng;
             MPI_Allreduce(MPI_IN_PLACE, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
             avg_ng = sum_ng / sum_npairs;
            
@@ -418,7 +418,7 @@ class Comm
             for (GraphElem size = (!min_size_ ? 1 : min_size_); size <= max_size_; size *= 2) 
             {
                 // memset
-                touch_buffers();
+                touch_buffers(size);
 
                 if(size > large_msg_size_) 
                 {
@@ -506,7 +506,7 @@ class Comm
             for (GraphElem size = (!min_size_ ? 1 : min_size_); size <= max_size_; size *= 2) 
             {
                 // memset
-                touch_buffers();
+                touch_buffers(size);
 
                 MPI_Barrier(comm_);
 
@@ -713,7 +713,7 @@ class Comm
                 for (GraphElem size = (!min_size_ ? 1 : min_size_); size <= max_size_; size *= 2) 
                 {
                     // memset
-                    touch_buffers();
+                    touch_buffers(size);
 
                     if(size > large_msg_size_) 
                     {
