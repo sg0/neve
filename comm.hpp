@@ -554,7 +554,7 @@ class Comm
             // total communicating pairs
             int sum_npairs = outdegree_ + indegree_;
             MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
-	    sum_npairs /= 2;
+            sum_npairs /= 2;
 
             if(rank_ == 0) 
             {
@@ -586,7 +586,7 @@ class Comm
 		if (rank_ == 0)
 			SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_WallTime_MainLoop", SCOREP_USER_REGION_TYPE_COMMON);
 #endif
-                // time communication kernel
+                // time communication kern  el
                 for (int l = 0; l < loop + skip; l++) 
                 {           
                     if (l == skip)
@@ -606,29 +606,29 @@ class Comm
 		  SCOREP_RECORDING_OFF();
 #endif
                 t_end = MPI_Wtime();
-                t = (t_end - t_start) * 1.0e6 / loop; 
-
-                // execution time stats
-                MPI_Allreduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, comm_);
+                t = (t_end - t_start) * 1.0e6 / (double)loop; 
                 double t_sq = t*t;
                 double sum_tsq = 0;
+                
+                // execution time stats
+                MPI_Allreduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, comm_);
                 MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
-		double avg_t = sum_t / (double)sum_npairs;
+		double avg_t = sum_t / (double) sum_npairs;
                 double avg_tsq = sum_tsq / (double) sum_npairs;
                 double var = avg_tsq - (avg_t*avg_t);
                 double stddev  = sqrt(var);
                 
-                double avg_lt = 0;
-                MPI_Reduce(&avg_t, &avg_lt, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
+                double ltail = 0.0;
+                MPI_Reduce(&t, &ltail, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
                 
                 if (rank_ == 0) 
                 {
                     std::cout << std::setw(10) << size << std::setw(17) << avg_t
-                        << std::setw(16) << avg_lt
+                        << std::setw(16) << ltail
                         << std::setw(16) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt(loop) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * 2.0) 
                         << std::endl;
                 }
             }
@@ -859,16 +859,16 @@ class Comm
                     double var = avg_tsq - (avg_t*avg_t);
                     double stddev  = sqrt(var);
 
-                    double avg_lt = 0;
-                    MPI_Reduce(&avg_t, &avg_lt, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
+                    double ltail = 0.0;
+                    MPI_Reduce(&t, &ltail, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
 
                     if (tgt_rank == 0) 
                     {
                         std::cout << std::setw(10) << size << std::setw(17) << avg_t
-                            << std::setw(16) << avg_lt
+                            << std::setw(16) << ltail
                             << std::setw(16) << var
                             << std::setw(16) << stddev 
-                            << std::setw(16) << stddev * ZCI / sqrt(loop * 2.0) 
+                            << std::setw(16) << stddev * ZCI / sqrt((double)loop * 2.0) 
                             << std::endl;
                     }
                 }
