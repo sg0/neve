@@ -552,7 +552,7 @@ class Comm
             int loop = lt_loop_count_, skip = lt_skip_count_;
             
             std::vector<double> plat(size_);
-            
+            int n5 = (int)std::ceil(0.05*size_); 
             int n90 = (int)std::ceil(0.9*size_); 
             int n99 = (int)std::ceil(0.99*size_);
 
@@ -568,6 +568,7 @@ class Comm
                 std::cout << "--------------------------------" << std::endl;
                 std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
                     << std::setw(16) << "Max(us)" 
+                    << std::setw(16) << "5%(us)" 
                     << std::setw(16) << "90%(us)" 
                     << std::setw(16) << "99%(us)" 
                     << std::setw(16) << "Variance" 
@@ -634,8 +635,9 @@ class Comm
                     std::sort(plat.begin(), plat.end());
                     std::cout << std::setw(10) << size << std::setw(17) << avg_t
                         << std::setw(16) << lmax
-                        << std::setw(16) << plat[n90-1]
-                        << std::setw(16) << plat[n99-1]
+                        << std::setw(16) << plat[n5-1]/2.0
+                        << std::setw(16) << plat[n90-1]/2.0
+                        << std::setw(16) << plat[n99-1]/2.0
                         << std::setw(16) << var
                         << std::setw(16) << stddev 
                         << std::setw(16) << stddev * ZCI / sqrt((double)loop * 2.0) 
@@ -824,6 +826,7 @@ class Comm
                 std::cout << "------------------------------------------" << std::endl;
                 std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
                     << std::setw(16) << "Max(us)"
+                    << std::setw(16) << "5%(us)" 
                     << std::setw(16) << "90%(us)" 
                     << std::setw(16) << "99%(us)" 
                     << std::setw(16) << "Variance" 
@@ -837,6 +840,7 @@ class Comm
             if (tgt_rank != MPI_UNDEFINED)
             {
                 std::vector<double> plat(tgt_size);
+                int n5 = (int)std::ceil(0.05*tgt_size);
                 int n90 = (int)std::ceil(0.9*tgt_size); 
                 int n99 = (int)std::ceil(0.99*tgt_size);
 
@@ -885,8 +889,9 @@ class Comm
                         std::sort(plat.begin(), plat.end());
                         std::cout << std::setw(10) << size << std::setw(17) << avg_t
                             << std::setw(16) << lmax
-                            << std::setw(16) << plat[n90-1]
-                            << std::setw(16) << plat[n99-1]
+                            << std::setw(16) << plat[n5-1]/2
+                            << std::setw(16) << plat[n90-1]/2
+                            << std::setw(16) << plat[n99-1]/2
                             << std::setw(16) << var
                             << std::setw(16) << stddev 
                             << std::setw(16) << stddev * ZCI / sqrt((double)loop * 2.0) 
