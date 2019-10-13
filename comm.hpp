@@ -552,8 +552,6 @@ class Comm
             int loop = lt_loop_count_, skip = lt_skip_count_;
             
             std::vector<double> plat(size_);
-            int n5 = (int)std::ceil(0.05*size_); 
-            int n90 = (int)std::ceil(0.9*size_); 
             int n99 = (int)std::ceil(0.99*size_);
 
             // total communicating pairs
@@ -568,8 +566,6 @@ class Comm
                 std::cout << "--------------------------------" << std::endl;
                 std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
                     << std::setw(16) << "Max(us)" 
-                    << std::setw(16) << "5%(us)" 
-                    << std::setw(16) << "90%(us)" 
                     << std::setw(16) << "99%(us)" 
                     << std::setw(16) << "Variance" 
                     << std::setw(15) << "STDDEV" 
@@ -635,8 +631,6 @@ class Comm
                     std::sort(plat.begin(), plat.end());
                     std::cout << std::setw(10) << size << std::setw(17) << avg_t
                         << std::setw(16) << lmax/2.0
-                        << std::setw(16) << plat[n5-1]/2.0
-                        << std::setw(16) << plat[n90-1]/2.0
                         << std::setw(16) << plat[n99-1]/2.0
                         << std::setw(16) << var
                         << std::setw(16) << stddev 
@@ -826,8 +820,6 @@ class Comm
                 std::cout << "------------------------------------------" << std::endl;
                 std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
                     << std::setw(16) << "Max(us)"
-                    << std::setw(16) << "5%(us)" 
-                    << std::setw(16) << "90%(us)" 
                     << std::setw(16) << "99%(us)" 
                     << std::setw(16) << "Variance" 
                     << std::setw(15) << "STDDEV" 
@@ -840,8 +832,6 @@ class Comm
             if (tgt_rank != MPI_UNDEFINED)
             {
                 std::vector<double> plat(tgt_size);
-                int n5 = (int)std::ceil(0.05*tgt_size);
-                int n90 = (int)std::ceil(0.9*tgt_size); 
                 int n99 = (int)std::ceil(0.99*tgt_size);
 
                 for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
@@ -889,8 +879,6 @@ class Comm
                         std::sort(plat.begin(), plat.end());
                         std::cout << std::setw(10) << size << std::setw(17) << avg_t
                             << std::setw(16) << lmax/2.0
-                            << std::setw(16) << plat[n5-1]/2
-                            << std::setw(16) << plat[n90-1]/2
                             << std::setw(16) << plat[n99-1]/2
                             << std::setw(16) << var
                             << std::setw(16) << stddev 
