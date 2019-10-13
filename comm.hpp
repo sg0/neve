@@ -634,7 +634,7 @@ class Comm
                 {
                     std::sort(plat.begin(), plat.end());
                     std::cout << std::setw(10) << size << std::setw(17) << avg_t
-                        << std::setw(16) << lmax
+                        << std::setw(16) << lmax/2.0
                         << std::setw(16) << plat[n5-1]/2.0
                         << std::setw(16) << plat[n90-1]/2.0
                         << std::setw(16) << plat[n99-1]/2.0
@@ -888,7 +888,7 @@ class Comm
                     {
                         std::sort(plat.begin(), plat.end());
                         std::cout << std::setw(10) << size << std::setw(17) << avg_t
-                            << std::setw(16) << lmax
+                            << std::setw(16) << lmax/2.0
                             << std::setw(16) << plat[n5-1]/2
                             << std::setw(16) << plat[n90-1]/2
                             << std::setw(16) << plat[n99-1]/2
