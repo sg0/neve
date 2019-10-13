@@ -451,12 +451,13 @@ class Comm
                 MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
                 double avg_t = sum_t / sum_npairs;
+                double avg_st = sum_t / size_;
                 double t_sq = t*t;
                 double sum_tsq = 0;
                 MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
-                double avg_tsq = sum_tsq / sum_npairs;
-                double var = avg_tsq - (avg_t*avg_t);
+                double avg_tsq = sum_tsq / size_;
+                double var = avg_tsq - (avg_st*avg_st);
                 double stddev = sqrt(var);
 
                 if (rank_ == 0) 
@@ -521,12 +522,13 @@ class Comm
                 MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
                 double avg_t = sum_t / sum_npairs;
+                double avg_st = sum_t / size_;
                 double t_sq = t*t;
                 double sum_tsq = 0;
                 MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
-                double avg_tsq = sum_tsq / sum_npairs;
-                double var = avg_tsq - (avg_t*avg_t);
+                double avg_tsq = sum_tsq / size_;
+                double var = avg_tsq - (avg_st*avg_st);
                 double stddev = sqrt(var);
 
                 if (rank_ == 0) 
@@ -618,8 +620,9 @@ class Comm
                 MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
 		double avg_t = sum_t / (double) sum_npairs;
-                double avg_tsq = sum_tsq / (double) sum_npairs;
-                double var = avg_tsq - (avg_t*avg_t);
+		double avg_st = sum_t / (double) size_; // no. of observations
+                double avg_tsq = sum_tsq / (double) size_;
+                double var = avg_tsq - (avg_st*avg_st);
                 double stddev  = sqrt(var);
                 
                 double lmax = 0.0;
@@ -746,13 +749,14 @@ class Comm
                     // execution time stats
                     MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, nbr_comm);
 
-                    double avg_t = sum_t / tgt_size;
+                    double avg_t = sum_t / tgt_deg;
+                    double avg_st = sum_t / tgt_size;
                     double t_sq = t*t;
                     double sum_tsq = 0;
                     MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, nbr_comm);
 
                     double avg_tsq = sum_tsq / tgt_size;
-                    double var = avg_tsq - (avg_t*avg_t);
+                    double var = avg_tsq - (avg_st*avg_st);
                     double stddev  = sqrt(var);
 
                     if (tgt_rank == 0) 
@@ -866,8 +870,9 @@ class Comm
                     MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, nbr_comm);
 
                     double avg_t = sum_t / (double)(2.0*tgt_deg);
-                    double avg_tsq = sum_tsq / (double)(2.0*tgt_deg);
-                    double var = avg_tsq - (avg_t*avg_t);
+                    double avg_st = sum_t / (double)(tgt_size);
+                    double avg_tsq = sum_tsq / (double)(tgt_size);
+                    double var = avg_tsq - (avg_st*avg_st);
                     double stddev  = sqrt(var);
 
                     double lmax = 0.0;
