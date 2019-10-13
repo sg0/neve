@@ -470,7 +470,7 @@ class Comm
                         << std::setw(15) << 1e6 * bw / size
                         << std::setw(18) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)(loop * avg_ng)) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)size_) 
                         << std::endl;
                 }
             }
@@ -541,7 +541,7 @@ class Comm
                         << std::setw(15) << 1e6 * bw / size
                         << std::setw(18) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)(avg_ng)) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)size_) 
                         << std::endl;
                 }
             }
@@ -637,7 +637,7 @@ class Comm
                         << std::setw(16) << plat[n99-1]/2.0
                         << std::setw(16) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * 2.0) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)size_) 
                         << std::endl;
                 }
             }
@@ -769,7 +769,7 @@ class Comm
                             << std::setw(15) << 1e6 * bw / size
                             << std::setw(18) << var
                             << std::setw(16) << stddev 
-                            << std::setw(16) << stddev * ZCI / sqrt((double)(loop * avg_ng)) 
+                            << std::setw(16) << stddev * ZCI / sqrt((double)tgt_size) 
                             << std::endl;
                     }
                 }
@@ -887,7 +887,7 @@ class Comm
                             << std::setw(16) << plat[n99-1]/2
                             << std::setw(16) << var
                             << std::setw(16) << stddev 
-                            << std::setw(16) << stddev * ZCI / sqrt((double)loop * 2.0) 
+                            << std::setw(16) << stddev * ZCI / sqrt((double)tgt_size) 
                             << std::endl;
                     }
                 }
