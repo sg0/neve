@@ -551,6 +551,11 @@ class Comm
             double t, t_start, t_end, sum_t = 0.0;
             int loop = lt_loop_count_, skip = lt_skip_count_;
             
+            std::vector<double> plat(size_);
+            
+            int n90 = (int)std::ceil(0.9*size_); 
+            int n99 = (int)std::ceil(0.99*size_);
+
             // total communicating pairs
             int sum_npairs = outdegree_ + indegree_;
             MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
@@ -562,7 +567,9 @@ class Comm
                 std::cout << "----------Latency test----------" << std::endl;
                 std::cout << "--------------------------------" << std::endl;
                 std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
-                    << std::setw(16) << "TLat(us)" 
+                    << std::setw(16) << "Max(us)" 
+                    << std::setw(16) << "90%(us)" 
+                    << std::setw(16) << "99%(us)" 
                     << std::setw(16) << "Variance" 
                     << std::setw(15) << "STDDEV" 
                     << std::setw(16) << "95% CI" 
@@ -579,14 +586,13 @@ class Comm
                     skip = lt_skip_count_large_;
 		}
                 
-                        
 #if defined(SCOREP_USER_ENABLE)
 	        SCOREP_RECORDING_ON();
 		SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_Loop", SCOREP_USER_REGION_TYPE_COMMON);
 		if (rank_ == 0)
 			SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_WallTime_MainLoop", SCOREP_USER_REGION_TYPE_COMMON);
 #endif
-                // time communication kern  el
+                // time communication kernel
                 for (int l = 0; l < loop + skip; l++) 
                 {           
                     if (l == skip)
@@ -619,19 +625,24 @@ class Comm
                 double var = avg_tsq - (avg_t*avg_t);
                 double stddev  = sqrt(var);
                 
-                double ltail = 0.0;
-                MPI_Reduce(&t, &ltail, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
+                double lmax = 0.0;
+                MPI_Reduce(&t, &lmax, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
+                MPI_Gather(&t, 1, MPI_DOUBLE, plat.data(), 1, MPI_DOUBLE, 0, comm_);
                 
                 if (rank_ == 0) 
                 {
+                    std::sort(plat.begin(), plat.end());
                     std::cout << std::setw(10) << size << std::setw(17) << avg_t
-                        << std::setw(16) << ltail
+                        << std::setw(16) << lmax
+                        << std::setw(16) << plat[n90-1]
+                        << std::setw(16) << plat[n99-1]
                         << std::setw(16) << var
                         << std::setw(16) << stddev 
                         << std::setw(16) << stddev * ZCI / sqrt((double)loop * 2.0) 
                         << std::endl;
                 }
             }
+            plat.clear();
         } 
 
         // Bandwidth/Latency estimation by analyzing a 
@@ -781,7 +792,7 @@ class Comm
             double t, t_start, t_end, sum_t = 0.0;
             int loop = lt_loop_count_, skip = lt_skip_count_;
             int tgt_rank = MPI_UNDEFINED, tgt_size = 0;
-            
+
             assert(target_nbrhood < size_);
 
             // extract process neighborhood of target_nbrhood PE
@@ -812,7 +823,9 @@ class Comm
                 std::cout << "----Latency test (single neighborhood)----" << std::endl;
                 std::cout << "------------------------------------------" << std::endl;
                 std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
-                    << std::setw(16) << "TLat" 
+                    << std::setw(16) << "Max(us)"
+                    << std::setw(16) << "90%(us)" 
+                    << std::setw(16) << "99%(us)" 
                     << std::setw(16) << "Variance" 
                     << std::setw(15) << "STDDEV" 
                     << std::setw(16) << "95% CI" 
@@ -823,6 +836,10 @@ class Comm
             // chosen process neighborhood 
             if (tgt_rank != MPI_UNDEFINED)
             {
+                std::vector<double> plat(tgt_size);
+                int n90 = (int)std::ceil(0.9*tgt_size); 
+                int n99 = (int)std::ceil(0.99*tgt_size);
+
                 for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
                 {       
                     MPI_Barrier(nbr_comm);
@@ -859,19 +876,24 @@ class Comm
                     double var = avg_tsq - (avg_t*avg_t);
                     double stddev  = sqrt(var);
 
-                    double ltail = 0.0;
-                    MPI_Reduce(&t, &ltail, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
+                    double lmax = 0.0;
+                    MPI_Reduce(&t, &lmax, 1, MPI_DOUBLE, MPI_MAX, 0, nbr_comm);
+                    MPI_Gather(&t, 1, MPI_DOUBLE, plat.data(), 1, MPI_DOUBLE, 0, nbr_comm);
 
                     if (tgt_rank == 0) 
                     {
+                        std::sort(plat.begin(), plat.end());
                         std::cout << std::setw(10) << size << std::setw(17) << avg_t
-                            << std::setw(16) << ltail
+                            << std::setw(16) << lmax
+                            << std::setw(16) << plat[n90-1]
+                            << std::setw(16) << plat[n99-1]
                             << std::setw(16) << var
                             << std::setw(16) << stddev 
                             << std::setw(16) << stddev * ZCI / sqrt((double)loop * 2.0) 
                             << std::endl;
                     }
                 }
+                plat.clear();
             }
 
             // remaining processes wait on 
