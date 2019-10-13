@@ -653,7 +653,7 @@ class Comm
             double t, t_start, t_end, sum_t = 0.0;
             int loop = bw_loop_count_, skip = bw_skip_count_;
             assert(target_nbrhood < size_);
-
+                
             // extract process neighborhood of target_nbrhood PE
             int tgt_deg = outdegree_;
             int tgt_rank = MPI_UNDEFINED, tgt_size = 0;
@@ -665,7 +665,22 @@ class Comm
             
             MPI_Bcast(exl_tgt.data(), tgt_deg, MPI_INT, target_nbrhood, comm_);
             exl_tgt[tgt_deg] = target_nbrhood;
+            
+            // find average number of ghost vertices
+            GraphElem avg_ng, sum_ng = out_nghosts_;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
+            avg_ng = sum_ng / tgt_deg; // number of pairs
 
+            // override computed avg_ng
+            if (max_ng > 0)
+            {
+                avg_ng = std::min(avg_ng, max_ng);
+                if (rank_ == 0)
+                {
+                    std::cout << "Number of ghost vertices set as: " << avg_ng << std::endl;
+                }
+            }
+            
             // create new group/comm
             MPI_Group cur_grp, nbr_grp;
             MPI_Comm nbr_comm;
@@ -676,7 +691,7 @@ class Comm
             
             MPI_Group_rank(nbr_grp, &tgt_rank);
             MPI_Group_size(nbr_grp, &tgt_size);
-
+            
             if(rank_ == target_nbrhood) 
             {
                 std::cout << "------------------------------------------" << std::endl;
@@ -689,26 +704,11 @@ class Comm
                     << std::setw(16) << "95% CI" 
                     << std::endl;
             }
-
+                
             // start communication only if belongs to the 
             // chosen process neighborhood 
             if (tgt_rank != MPI_UNDEFINED)
             {
-                // find average number of ghost vertices
-                GraphElem avg_ng, sum_ng = out_nghosts_;
-                MPI_Allreduce(MPI_IN_PLACE, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
-                avg_ng = sum_ng / tgt_deg; // number of pairs
-
-                // override computed avg_ng
-                if (max_ng > 0)
-                {
-                    avg_ng = std::min(avg_ng, max_ng);
-                    if (rank_ == 0)
-                    {
-                        std::cout << "Number of ghost vertices set as: " << avg_ng << std::endl;
-                    }
-                }
-
                 // readjust request buffer sizes and counts
                 delete []sreq_;
                 delete []rreq_;
