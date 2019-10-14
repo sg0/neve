@@ -202,9 +202,12 @@ int main(int argc, char *argv[])
     
     MPI_Reduce(&p_tot, &t_tot, 1, MPI_DOUBLE, 
             MPI_SUM, 0, MPI_COMM_WORLD);
-    if (me == 0)
+    if (me == 0) 
+    {
         std::cout << "Average execution time (in s) for running the test on " << nprocs << " processes: " 
             << (double)(t_tot/(double)nprocs) << std::endl;
+        std::cout << "Resolution of MPI_Wtime: " << MPI_Wtick() << std::endl;
+    }
  
     MPI_Barrier(MPI_COMM_WORLD);
    
