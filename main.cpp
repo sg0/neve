@@ -59,6 +59,7 @@ static int me, nprocs;
 static int ranksPerNode = 1;
 static GraphElem nvRGG = 0;
 static int generateGraph = 0;
+
 static GraphWeight randomEdgePercent = 0.0;
 static long minSizeExchange = 0;
 static long maxSizeExchange = 0;
@@ -66,8 +67,13 @@ static long maxNumGhosts = 0;
 static bool readBalanced = false;
 static bool hardSkip = false;
 static bool randomNumberLCG = false;
+
+static int lttOption = 0;
 static bool performBWTest = false;
 static bool performLTTest = false;
+static bool performLTTestNbrAlltoAll = false;
+static bool performLTTestNbrAllGather = false;
+
 static bool chooseSingleNbr = false;
 static int processNbr = 0;
 static bool shrinkGraph = false;
@@ -99,10 +105,9 @@ int main(int argc, char *argv[])
     { 
         GenerateRGG gr(nvRGG);
         g = gr.generate(randomNumberLCG, true /*isUnitEdgeWeight*/, randomEdgePercent);
-        //g->print(false);
     }
     else 
-    { // read input graph
+    {   // read input graph
         BinaryEdgeList rm;
         if (readBalanced == true)
         {
@@ -116,9 +121,11 @@ int main(int argc, char *argv[])
         }
         else
             g = rm.read(me, nprocs, ranksPerNode, inputFileName);
-        //g->print();
     }
 
+#if defined(PRINT_GRAPH_EDGES)        
+    g->print();
+#endif
     g->print_dist_stats();
     assert(g != nullptr);
 
@@ -180,20 +187,53 @@ int main(int argc, char *argv[])
         }
     }
 
-    // latency test
-    if (performLTTest) 
+    // latency tests
+    if (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather)
     {
-        if (chooseSingleNbr)
+        if (performLTTest) 
         {
-            if (me == 0)
+            if (chooseSingleNbr)
             {
-                std::cout << "Choosing the neighborhood of process #" << processNbr 
-                    << " for latency test." << std::endl;
+                if (me == 0)
+                {
+                    std::cout << "Choosing the neighborhood of process #" << processNbr 
+                        << " for latency test." << std::endl;
+                }
+                c.p2p_lt_snbr(processNbr);
             }
-            c.p2p_lt_snbr(processNbr);
+            else
+                c.p2p_lt();
         }
-        else
-            c.p2p_lt();
+
+        if (performLTTestNbrAlltoAll) 
+        {
+            if (chooseSingleNbr)
+            {
+                if (me == 0)
+                {
+                    std::cout << "Choosing the neighborhood of process #" << processNbr 
+                        << " for latency test (using MPI_Isend/Irecv)." << std::endl;
+                }
+                c.p2p_lt_snbr(processNbr);
+            }
+            else
+                c.nbr_ala_lt();
+        }
+
+        if (performLTTestNbrAllGather) 
+        {
+            if (chooseSingleNbr)
+            {
+                if (me == 0)
+                {
+                    std::cout << "Choosing the neighborhood of process #" << processNbr 
+                        << " for latency test (using MPI_Isend/Irecv)." << std::endl;
+                }
+                c.p2p_lt_snbr(processNbr);
+            }
+            else
+                c.nbr_aga_lt();
+        }
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -208,7 +248,9 @@ int main(int argc, char *argv[])
             << (double)(t_tot/(double)nprocs) << std::endl;
         std::cout << "Resolution of MPI_Wtime: " << MPI_Wtick() << std::endl;
     }
- 
+
+    c.destroy_nbr_comm(); 
+
     MPI_Barrier(MPI_COMM_WORLD);
    
     MPI_Finalize();
@@ -220,7 +262,7 @@ void parseCommandLine(const int argc, char * const argv[])
 {
   int ret;
 
-  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:wts:z:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -255,7 +297,15 @@ void parseCommandLine(const int argc, char * const argv[])
       performBWTest = true;
       break;
     case 't':
-      performLTTest = true;
+      lttOption = atoi(optarg);
+      if (lttOption == 0)
+          performLTTest = true;
+      else if (lttOption == 1)
+          performLTTestNbrAlltoAll = true;
+      else if (lttOption == 2)
+          performLTTestNbrAllGather = true;
+      else
+          performLTTest = true;
       break;
     case 'h':
       hardSkip = true;
@@ -275,7 +325,7 @@ void parseCommandLine(const int argc, char * const argv[])
   }
 
   // warnings/info
-  if (me == 0 && performLTTest && maxNumGhosts) 
+  if (me == 0 && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather) && maxNumGhosts) 
   {
       std::cout << "Setting the number of ghost vertices (-g <...>) has no effect for latency test."
           << std::endl;
@@ -298,15 +348,24 @@ void parseCommandLine(const int argc, char * const argv[])
       std::cout << "Graph shrinking (option -z) must be greater than 0.0. " << std::endl;
   }
 
-
-  if (me == 0 && shrinkGraph && performLTTest)
+  if (me == 0 && shrinkGraph && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather))
   {
 	  std::cout << "Graph shrinking is ONLY valid for bandwidth test, NOT latency test which just performs message exchanges across the process neighborhood of a graph." << std::endl;	  
   }
 
-  if (me == 0 && performLTTest && hardSkip)
+  if (me == 0 && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather) && hardSkip)
   {
       std::cout << "The hard skip option to disable warmup and extra communication loops only affects the bandwidth test." << std::endl;
+  }
+  
+  if (me == 0 && chooseSingleNbr && (performLTTestNbrAlltoAll || performLTTestNbrAllGather))
+  {
+      std::cout << "At present, only MPI Isend/Irecv communication is supported when a single process's neighborhood is selected.." << std::endl;
+  }
+  
+  if (me == 0 && lttOption > 2)
+  {
+      std::cout << "Valid values for latency test arguments are 0 (Isend/Irecv, the default case), 1 (Neighbor All-to-All) and 2 (Neighbor All-Gather)." << std::endl;
   }
 
   // errors
