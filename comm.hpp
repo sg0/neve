@@ -498,7 +498,7 @@ class Comm
                         << std::setw(15) << 1e6 * bw / size
                         << std::setw(18) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)size_) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * avg_ng) 
                         << std::endl;
                 }
             }
@@ -569,7 +569,7 @@ class Comm
                         << std::setw(15) << 1e6 * bw / size
                         << std::setw(18) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)size_) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)avg_ng) 
                         << std::endl;
                 }
             }
@@ -665,7 +665,7 @@ class Comm
                         << std::setw(16) << plat[n99-1]/2.0
                         << std::setw(16) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)size_) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * sum_npairs) 
                         << std::endl;
                 }
             }
@@ -680,7 +680,12 @@ class Comm
             
             std::vector<double> plat(size_);
             int n99 = (int)std::ceil(0.99*size_);
-
+           
+            // total communicating pairs
+            int sum_npairs = outdegree_ + indegree_;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
+            sum_npairs /= 2;
+  
             if(rank_ == 0) 
             {
                 std::cout << "---------------------------------" << std::endl;
@@ -740,7 +745,7 @@ class Comm
                         << std::setw(16) << plat[n99-1]
                         << std::setw(16) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)size_) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * sum_npairs) 
                         << std::endl;
                 }
             }
@@ -755,7 +760,12 @@ class Comm
             
             std::vector<double> plat(size_);
             int n99 = (int)std::ceil(0.99*size_);
-
+            
+            // total communicating pairs
+            int sum_npairs = outdegree_ + indegree_;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
+            sum_npairs /= 2;
+            
             if(rank_ == 0) 
             {
                 std::cout << "---------------------------------" << std::endl;
@@ -815,7 +825,7 @@ class Comm
                         << std::setw(16) << plat[n99-1]
                         << std::setw(16) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)size_) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * sum_npairs) 
                         << std::endl;
                 }
             }
@@ -947,7 +957,7 @@ class Comm
                             << std::setw(15) << 1e6 * bw / size
                             << std::setw(18) << var
                             << std::setw(16) << stddev 
-                            << std::setw(16) << stddev * ZCI / sqrt((double)tgt_size) 
+                            << std::setw(16) << stddev * ZCI / sqrt((double)avg_ng * loop) 
                             << std::endl;
                     }
                 }
@@ -1065,7 +1075,7 @@ class Comm
                             << std::setw(16) << plat[n99-1]/2
                             << std::setw(16) << var
                             << std::setw(16) << stddev 
-                            << std::setw(16) << stddev * ZCI / sqrt((double)tgt_size) 
+                            << std::setw(16) << stddev * ZCI / sqrt((double)tgt_size * loop) 
                             << std::endl;
                     }
                 }
