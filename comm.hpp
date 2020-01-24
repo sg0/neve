@@ -47,10 +47,6 @@
 #include <cstring>
 #include <iomanip>
 
-#if defined(TEST_LT_NOMPI)
-#include <unistd.h>
-#endif
-
 #if defined(SCOREP_USER_ENABLE)
 #include <scorep/SCOREP_User.h>
 #endif
