@@ -161,10 +161,20 @@ class Comm
             } \
 	    a2a_send_dat.clear(); \
             a2a_recv_dat.clear(); \
+            /* create graph topology communicator for neighbor collectives */ \
+            MPI_Dist_graph_create_adjacent(comm_, sources_.size(), sources_.data(), \
+                    MPI_UNWEIGHTED, targets_.size(), targets_.data(), MPI_UNWEIGHTED, \
+                    MPI_INFO_NULL, 0 , &nbr_comm_); \
+            /* following is not necessary, just checking */ \
+            int weighted, indeg, outdeg; \
+            MPI_Dist_graph_neighbors_count(nbr_comm_, &indeg, &outdeg, &weighted); \
+            assert(indegree_ == sources_.size()); \
+            assert(outdegree_ == targets_.size()); \
         } while(0)
 
-        Comm(Graph* g):
-            g_(g), in_nghosts_(0), out_nghosts_(0), lnv_(0),
+        explicit Comm(Graph* g):
+            g_(g), comm_(MPI_COMM_NULL), nbr_comm_(MPI_COMM_NULL), 
+            in_nghosts_(0), out_nghosts_(0), lnv_(0),
             target_pindex_(0), source_pindex_(0),
             nghosts_in_target_(0), nghosts_in_source_(0),
             sbuf_(nullptr), rbuf_(nullptr),
@@ -182,8 +192,9 @@ class Comm
             targets_(0), sources_(0), indegree_(0), outdegree_(0)
         { COMM_COMMON(); }
          
-        Comm(Graph* g, GraphElem min_size, GraphElem max_size, float shrink_percent):
-            g_(g), in_nghosts_(0), out_nghosts_(0), lnv_(0),
+        explicit Comm(Graph* g, GraphElem min_size, GraphElem max_size, float shrink_percent):
+            g_(g), comm_(MPI_COMM_NULL), nbr_comm_(MPI_COMM_NULL), 
+            in_nghosts_(0), out_nghosts_(0), lnv_(0),
             target_pindex_(0), source_pindex_(0),
             nghosts_in_target_(0), nghosts_in_source_(0),
             sbuf_(nullptr), rbuf_(nullptr),
@@ -202,14 +213,15 @@ class Comm
             shrinkp_(shrink_percent)
         { COMM_COMMON(); }       
         
-        Comm(Graph* g, 
+        explicit Comm(Graph* g, 
                 GraphElem max_size, GraphElem min_size,
                 GraphElem large_msg_size,
                 int bw_loop_count, int bw_loop_count_large,
                 int bw_skip_count, int bw_skip_count_large,
                 int lt_loop_count, int lt_loop_count_large,
                 int lt_skip_count, int lt_skip_count_large):
-            g_(g), in_nghosts_(0), out_nghosts_(0), lnv_(0),
+            g_(g), comm_(MPI_COMM_NULL), nbr_comm_(MPI_COMM_NULL), 
+            in_nghosts_(0), out_nghosts_(0), lnv_(0),
             target_pindex_(0), source_pindex_(0),
             nghosts_in_target_(0), nghosts_in_source_(0),
             sbuf_(nullptr), rbuf_(nullptr),
@@ -226,15 +238,23 @@ class Comm
             lt_skip_count_large_(lt_skip_count_large),
             targets_(0), sources_(0), indegree_(0), outdegree_(0)
         { COMM_COMMON(); }
+
+        // destroy graph topology communicator
+        void destroy_nbr_comm() 
+        { 
+            if (nbr_comm_ != MPI_COMM_NULL)
+                MPI_Comm_free(&nbr_comm_); 
+        };
         
         ~Comm() 
-        {            
+        {
             targets_.clear();
             target_pindex_.clear();
             nghosts_in_target_.clear();
             sources_.clear();
             source_pindex_.clear();
             nghosts_in_source_.clear();
+            
             delete []sbuf_;
             delete []rbuf_;
             delete []sreq_;
@@ -283,7 +303,7 @@ class Comm
             MPI_Waitall(out_nghosts_, sreq_, MPI_STATUSES_IGNORE);
         }
        
-        // kernel for latency
+        // kernel for latency using MPI Isend/Irecv
         inline void comm_kernel_lt(GraphElem const& size)
 	{
 	    for (int p = 0; p < indegree_; p++)
@@ -313,7 +333,15 @@ class Comm
         }
 #endif
 
-        // kernel for latency with extra input parameters
+        // kernel for latency using MPI_Neighbor_alltoall
+        inline void comm_kernel_lt_ala(GraphElem const& size)
+	{ MPI_Neighbor_alltoall(sbuf_, size, MPI_CHAR, rbuf_, size, MPI_CHAR, nbr_comm_); }
+
+        // kernel for latency using MPI_Neighbor_allgather
+        inline void comm_kernel_lt_aga(GraphElem const& size)
+	{ MPI_Neighbor_allgather(sbuf_, size, MPI_CHAR, rbuf_, size, MPI_CHAR, nbr_comm_); }
+
+        // kernel for latency with extra input paragathers
         inline void comm_kernel_lt(GraphElem const& size, GraphElem const& npairs, 
                 MPI_Comm gcomm, int const& me)
         { 
@@ -487,7 +515,7 @@ class Comm
                         << std::setw(15) << 1e6 * bw / size
                         << std::setw(18) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)size_) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * avg_ng) 
                         << std::endl;
                 }
             }
@@ -558,13 +586,13 @@ class Comm
                         << std::setw(15) << 1e6 * bw / size
                         << std::setw(18) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)size_) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)avg_ng) 
                         << std::endl;
                 }
             }
         }
         
-        // Latency test
+        // Latency test using MPI Isend/Irecv
         void p2p_lt()
         {
             double t, t_start, t_end, sum_t = 0.0;
@@ -658,12 +686,172 @@ class Comm
                         << std::setw(16) << plat[n99-1]/2.0
                         << std::setw(16) << var
                         << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)size_) 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * sum_npairs) 
                         << std::endl;
                 }
             }
             plat.clear();
         } 
+        
+        // Latency test using all-to-all among graph neighbors 
+        void nbr_ala_lt()
+        {
+            double t, t_start, t_end, sum_t = 0.0;
+            int loop = lt_loop_count_, skip = lt_skip_count_;
+            
+            std::vector<double> plat(size_);
+            int n99 = (int)std::ceil(0.99*size_);
+           
+            // total communicating pairs
+            int sum_npairs = outdegree_ + indegree_;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
+            sum_npairs /= 2;
+  
+            if(rank_ == 0) 
+            {
+                std::cout << "---------------------------------" << std::endl;
+                std::cout << "----Latency test (All-To-All)----" << std::endl;
+                std::cout << "---------------------------------" << std::endl;
+                std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
+                    << std::setw(16) << "Max(us)" 
+                    << std::setw(16) << "99%(us)" 
+                    << std::setw(16) << "Variance" 
+                    << std::setw(15) << "STDDEV" 
+                    << std::setw(16) << "95% CI" 
+                    << std::endl;
+            }
+
+	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
+            {       
+                MPI_Barrier(comm_);
+
+                if (size > large_msg_size_) 
+                {
+                    loop = lt_loop_count_large_;
+                    skip = lt_skip_count_large_;
+		}
+                
+                // time communication kernel
+                for (int l = 0; l < loop + skip; l++) 
+                {           
+                    if (l == skip)
+                        t_start = MPI_Wtime();
+                    
+                    comm_kernel_lt_ala(size);
+                }
+
+                t_end = MPI_Wtime();
+                t = (t_end - t_start) * 1.0e6 / (double)loop; 
+                double t_sq = t*t;
+                double sum_tsq = 0;
+                
+                // execution time stats
+                MPI_Allreduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, comm_);
+                MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
+
+		double avg_t = sum_t / (double) size_;
+                double avg_tsq = sum_tsq / (double) size_;
+                double var = avg_tsq - (avg_t*avg_t);
+                double stddev  = sqrt(var);
+                
+                double lmax = 0.0;
+                MPI_Reduce(&t, &lmax, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
+                MPI_Gather(&t, 1, MPI_DOUBLE, plat.data(), 1, MPI_DOUBLE, 0, comm_);
+                
+                if (rank_ == 0) 
+                {
+                    std::sort(plat.begin(), plat.end());
+                    std::cout << std::setw(10) << size << std::setw(17) << avg_t
+                        << std::setw(16) << lmax
+                        << std::setw(16) << plat[n99-1]
+                        << std::setw(16) << var
+                        << std::setw(16) << stddev 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * sum_npairs) 
+                        << std::endl;
+                }
+            }
+            plat.clear();
+        } 
+         
+        // Latency test using all-gather among graph neighbors 
+        void nbr_aga_lt()
+        {
+            double t, t_start, t_end, sum_t = 0.0;
+            int loop = lt_loop_count_, skip = lt_skip_count_;
+            
+            std::vector<double> plat(size_);
+            int n99 = (int)std::ceil(0.99*size_);
+            
+            // total communicating pairs
+            int sum_npairs = outdegree_ + indegree_;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
+            sum_npairs /= 2;
+            
+            if(rank_ == 0) 
+            {
+                std::cout << "---------------------------------" << std::endl;
+                std::cout << "----Latency test (All-Gather)----" << std::endl;
+                std::cout << "---------------------------------" << std::endl;
+                std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
+                    << std::setw(16) << "Max(us)" 
+                    << std::setw(16) << "99%(us)" 
+                    << std::setw(16) << "Variance" 
+                    << std::setw(15) << "STDDEV" 
+                    << std::setw(16) << "95% CI" 
+                    << std::endl;
+            }
+
+	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
+            {       
+                MPI_Barrier(comm_);
+
+                if (size > large_msg_size_) 
+                {
+                    loop = lt_loop_count_large_;
+                    skip = lt_skip_count_large_;
+		}
+                
+                // time communication kernel
+                for (int l = 0; l < loop + skip; l++) 
+                {           
+                    if (l == skip)
+                        t_start = MPI_Wtime();
+                    
+                    comm_kernel_lt_aga(size);
+                }
+
+                t_end = MPI_Wtime();
+                t = (t_end - t_start) * 1.0e6 / (double)loop; 
+                double t_sq = t*t;
+                double sum_tsq = 0;
+                
+                // execution time stats
+                MPI_Allreduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, comm_);
+                MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
+
+		double avg_t = sum_t / (double) size_;
+                double avg_tsq = sum_tsq / (double) size_;
+                double var = avg_tsq - (avg_t*avg_t);
+                double stddev  = sqrt(var);
+                
+                double lmax = 0.0;
+                MPI_Reduce(&t, &lmax, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
+                MPI_Gather(&t, 1, MPI_DOUBLE, plat.data(), 1, MPI_DOUBLE, 0, comm_);
+                
+                if (rank_ == 0) 
+                {
+                    std::sort(plat.begin(), plat.end());
+                    std::cout << std::setw(10) << size << std::setw(17) << avg_t
+                        << std::setw(16) << lmax
+                        << std::setw(16) << plat[n99-1]
+                        << std::setw(16) << var
+                        << std::setw(16) << stddev 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * sum_npairs) 
+                        << std::endl;
+                }
+            }
+            plat.clear();
+        }       
 
         // Bandwidth/Latency estimation by analyzing a 
         // single process neighborhood
@@ -790,7 +978,7 @@ class Comm
                             << std::setw(15) << 1e6 * bw / size
                             << std::setw(18) << var
                             << std::setw(16) << stddev 
-                            << std::setw(16) << stddev * ZCI / sqrt((double)tgt_size) 
+                            << std::setw(16) << stddev * ZCI / sqrt((double)avg_ng * loop) 
                             << std::endl;
                     }
                 }
@@ -908,7 +1096,7 @@ class Comm
                             << std::setw(16) << plat[n99-1]/2
                             << std::setw(16) << var
                             << std::setw(16) << stddev 
-                            << std::setw(16) << stddev * ZCI / sqrt((double)tgt_size) 
+                            << std::setw(16) << stddev * ZCI / sqrt((double)tgt_size * loop) 
                             << std::endl;
                     }
                 }
@@ -946,7 +1134,7 @@ class Comm
         float shrinkp_; // graph shrink percent
         int rank_, size_, indegree_, outdegree_;
         std::vector<int> targets_, sources_;
-        MPI_Comm comm_;
+        MPI_Comm comm_, nbr_comm_;
 };
 
 #endif

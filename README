@@ -63,7 +63,7 @@ https://github.com/Exa-Graph/vite
 
 Please contact the following for any queries or support:
 
-Sayan Ghosh, PNNL (zsayanz at gmail dot com)
+Sayan Ghosh, PNNL (sayan dot ghosh at pnnl dot gov)
 Mahantesh Halappanavar, PNNL (hala at pnnl dot gov)
 
 *******
@@ -82,10 +82,10 @@ Pass -DPRINT_DIST_STATS while building for printing distributed graph characteri
 Execution options
 *****************
 E.g.: 
-mpiexec -n 2 bin/./neve -f karate.bin -w -t -z 5
-mpiexec -n 4 bin/./neve -f karate.bin -w -t -s 2 -g 5
+mpiexec -n 2 bin/./neve -f karate.bin -w -t 0 -z 5
+mpiexec -n 4 bin/./neve -f karate.bin -w -t 0 -s 2 -g 5
 mpiexec -n 2 bin/./neve -l -n 100 -w 
-mpiexec -n 2 bin/./neve -n 100 -t
+mpiexec -n 2 bin/./neve -n 100 -t 0
 mpiexec -n 2 bin/./neve -p 2 -n 100 -w 
 
 Possible options (can be combined):
@@ -106,7 +106,8 @@ Possible options (can be combined):
                       meaningful when an input binary graph file is passed with option "-f".
                       naggr := (nranks > 1) ? (nprocs/nranks) : nranks;
 7   -w              : Report Bandwidth in MB/s[*].
-8.  -t              : Report Latency in microseconds[*].
+8.  -t <0|1|2>      : Report Latency in microseconds[*]. Option '0' uses nonblocking Send/Recv, 
+                      Option '1' uses MPI_Neighbor_alltoall and Option '2' uses MPI_Neighbor_allgather.
 9.  -x <bytes>      : Maximum data exchange size (in bytes).
 10. -m <bytes>      : Minimum data exchange size (in bytes).
 11. -s <PE>         : Analyze a single process neighborhood. Performs bidirectional message 
@@ -126,7 +127,7 @@ Possible options (can be combined):
                       Hence, this option can help 'shrink' a graph. Only valid for b/w test, because
 		      latency test will just perform message transfers between process neighborhoods.
 
-[*]Note: Unless -w or -t is passed, the code will just load the graph and create the graph data 
+[*]Note: Unless -w or -t <...> is passed, the code will just load the graph and create the graph data 
 structure. This is deliberate, in case we want to measure the overhead of loading a graph and 
 time only the file I/O part (like measuring the impact of different #aggregators through the 
 -r <nranks> option).
