@@ -47,6 +47,10 @@
 #include <cstring>
 #include <iomanip>
 
+#if defined(TEST_LT_NOMPI)
+#include <unistd.h>
+#endif
+
 #if defined(SCOREP_USER_ENABLE)
 #include <scorep/SCOREP_User.h>
 #endif
@@ -295,6 +299,19 @@ class Comm
             MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
             MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
         }
+       
+#if defined(TEST_LT_NOMPI) 
+	// same as above, but replaces MPI with usleep to measure
+	// communication overhead
+	inline void comm_kernel_lt_nompi(GraphElem const& size)
+	{
+	    for (int p = 0; p < indegree_; p++)
+		usleep(size);
+
+	    for (int p = 0; p < outdegree_; p++)
+		usleep(size);
+        }
+#endif
 
         // kernel for latency with extra input parameters
         inline void comm_kernel_lt(GraphElem const& size, GraphElem const& npairs, 
@@ -600,7 +617,11 @@ class Comm
                         MPI_Barrier(comm_);
                     }
                     
+#if defined(TEST_LT_NOMPI) 
+                    comm_kernel_lt_nompi(size);
+#else
                     comm_kernel_lt(size);
+#endif
                 }
 
 #if defined(SCOREP_USER_ENABLE)
