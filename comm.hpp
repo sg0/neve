@@ -316,16 +316,23 @@ class Comm
             MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
         }
        
-#if defined(TEST_LT_NOMPI) 
+#if defined(TEST_LT_MPI_PROC_NULL) 
 	// same as above, but replaces MPI with usleep to measure
 	// communication overhead
-	inline void comm_kernel_lt_nompi(GraphElem const& size)
+	inline void comm_kernel_lt_pnull(GraphElem const& size)
 	{
 	    for (int p = 0; p < indegree_; p++)
-		usleep(size);
+	    {
+		MPI_Irecv(rbuf_, size, MPI_CHAR, MPI_PROC_NULL, 100, comm_, rreq_ + p);
+	    }
 
 	    for (int p = 0; p < outdegree_; p++)
-		usleep(size);
+	    {
+		MPI_Isend(sbuf_, size, MPI_CHAR, MPI_PROC_NULL, 100, comm_, sreq_ + p);
+	    }
+
+            MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
         }
 #endif
 
@@ -641,8 +648,8 @@ class Comm
                         MPI_Barrier(comm_);
                     }
                     
-#if defined(TEST_LT_NOMPI) 
-                    comm_kernel_lt_nompi(size);
+#if defined(TEST_LT_MPI_PROC_NULL) 
+                    comm_kernel_lt_pnull(size);
 #else
                     comm_kernel_lt(size);
 #endif
