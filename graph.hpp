@@ -603,7 +603,6 @@ class GenerateRGG
                 if (rank_ == (nprocs_ - 1))
                     up_ = rank_ - 1;
             }
-
             n_ = nv_ / nprocs_;
 
             // check if number of nodes is divisible by #processes

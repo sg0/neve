@@ -67,6 +67,7 @@ static long maxNumGhosts = 0;
 static bool readBalanced = false;
 static bool hardSkip = false;
 static bool randomNumberLCG = false;
+static bool fallAsleep = false;
 
 static int lttOption = 0;
 static bool performBWTest = false;
@@ -201,8 +202,15 @@ int main(int argc, char *argv[])
                 }
                 c.p2p_lt_snbr(processNbr);
             }
-            else
-                c.p2p_lt();
+            else {
+                if (fallAsleep) {
+                    if (me == 0)
+                        std::cout << "Invoking (u)sleep for an epoch equal to #locally-owned-vertices" << std::endl;
+                    c.p2p_lt_usleep();
+                }
+                else
+                    c.p2p_lt();
+            }
         }
 
         if (performLTTestNbrAlltoAll) 
@@ -262,7 +270,7 @@ void parseCommandLine(const int argc, char * const argv[])
 {
   int ret;
 
-  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:u")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -317,6 +325,9 @@ void parseCommandLine(const int argc, char * const argv[])
     case 'z':
       shrinkGraph = true;
       graphShrinkPercent = atof(optarg);
+      break;
+    case 'u':
+      fallAsleep = true;
       break;
     default:
       assert(0 && "Should not reach here!!");
