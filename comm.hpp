@@ -307,7 +307,6 @@ class Comm
 		MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
 	    }
 
-            usleep(lnv_);
 	    
             for (int p = 0; p < outdegree_; p++)
 	    {
@@ -328,7 +327,6 @@ class Comm
 		MPI_Irecv(rbuf_, size, MPI_CHAR, MPI_PROC_NULL, 100, comm_, rreq_ + p);
 	    }
 
-            usleep(lnv_);
 
 	    for (int p = 0; p < outdegree_; p++)
 	    {
@@ -348,7 +346,9 @@ class Comm
 		MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
 	    }
 
-	    for (int p = 0; p < outdegree_; p++)
+            usleep(lnv_);
+	    
+            for (int p = 0; p < outdegree_; p++)
 	    {
 		MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
 	    }
@@ -367,7 +367,9 @@ class Comm
 		MPI_Irecv(rbuf_, size, MPI_CHAR, MPI_PROC_NULL, 100, comm_, rreq_ + p);
 	    }
 
-	    for (int p = 0; p < outdegree_; p++)
+            usleep(lnv_);
+	    
+            for (int p = 0; p < outdegree_; p++)
 	    {
 		MPI_Isend(sbuf_, size, MPI_CHAR, MPI_PROC_NULL, 100, comm_, sreq_ + p);
 	    }
