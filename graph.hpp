@@ -261,8 +261,44 @@ class Graph
 
             GraphWeight average  = (GraphWeight) sumdeg / size_;
             GraphWeight avg_sq   = (GraphWeight) sum_sq / size_;
-            GraphWeight var      = avg_sq - (average*average);
+            GraphWeight var      = std::abs(avg_sq - (average*average));
             GraphWeight stddev   = sqrt(var);
+            
+            MPI_Barrier(comm_);
+            
+            GraphElem pdeg = 0;
+            for (GraphElem v = 0; v < lnv_; v++)
+            {
+                GraphElem e0, e1;
+                this->edge_range(v, e0, e1);
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    Edge const& edge = this->get_edge(e);
+                    const int owner = this->get_owner(edge.tail_); 
+                    if (owner != rank_)
+                    {
+                        if (std::find(targets_.begin(), targets_.end(), owner) 
+                                == targets_.end())
+                        {
+                            pdeg += 1;
+                            targets_.push_back(owner);
+                        }
+                    }
+                }
+            }
+            
+            GraphElem spdeg, mpdeg;
+            MPI_Reduce(&pdeg, &spdeg, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+            MPI_Reduce(&pdeg, &mpdeg, 1, MPI_GRAPH_TYPE, MPI_MAX, 0, comm_);
+
+            GraphElem pmy_sq = pdeg*pdeg;
+            GraphElem psum_sq = 0;
+            MPI_Reduce(&pmy_sq, &psum_sq, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+
+            GraphWeight paverage = (GraphWeight) spdeg / size_;
+            GraphWeight pavg_sq  = (GraphWeight) psum_sq / size_;
+            GraphWeight pvar     = std::abs(pavg_sq - (paverage*paverage));
+            GraphWeight pstddev  = sqrt(pvar);
 
             MPI_Barrier(comm_);
 
@@ -280,7 +316,16 @@ class Graph
                 std::cout << "Variance: " << var << std::endl;
                 std::cout << "Standard deviation: " << stddev << std::endl;
                 std::cout << "-------------------------------------------------------" << std::endl;
-
+                std::cout << "Process graph characteristics" << std::endl;
+                std::cout << "-------------------------------------------------------" << std::endl;
+                std::cout << "Number of vertices: " << size_ << std::endl;
+                std::cout << "Number of edges: " << spdeg << std::endl;
+                std::cout << "Maximum number of edges: " << mpdeg << std::endl;
+                std::cout << "Average number of edges: " << paverage << std::endl;
+                std::cout << "Expected value of X^2: " << pavg_sq << std::endl;
+                std::cout << "Variance: " << pvar << std::endl;
+                std::cout << "Standard deviation: " << pstddev << std::endl;
+                std::cout << "-------------------------------------------------------" << std::endl;
             }
         }
         
@@ -290,6 +335,7 @@ class Graph
     private:
         GraphElem lnv_, lne_, nv_, ne_;
         std::vector<GraphElem> parts_;       
+        std::vector<int> targets_;       
         MPI_Comm comm_; 
         int rank_, size_;
 };
