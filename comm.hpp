@@ -667,7 +667,8 @@ class Comm
             }
 
 	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
-            {       
+            {      
+                touch_buffers(size);
                 MPI_Barrier(comm_);
 
                 if (size > large_msg_size_) 
@@ -769,6 +770,7 @@ class Comm
 
 	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
             {       
+                touch_buffers(size);
                 MPI_Barrier(comm_);
 
                 if (size > large_msg_size_) 
@@ -870,6 +872,7 @@ class Comm
 
 	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
             {       
+                touch_buffers(size);
                 MPI_Barrier(comm_);
 
                 if (size > large_msg_size_) 
@@ -950,6 +953,7 @@ class Comm
 
 	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
             {       
+                touch_buffers(size);
                 MPI_Barrier(comm_);
 
                 if (size > large_msg_size_) 
@@ -1078,7 +1082,6 @@ class Comm
 
                 for (GraphElem size = (!min_size_ ? 1 : min_size_); size <= max_size_; size *= 2) 
                 {
-                    // memset
                     touch_buffers(size);
 
                     if(size > large_msg_size_) 
@@ -1196,6 +1199,7 @@ class Comm
 
                 for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
                 {       
+                    touch_buffers(size);
                     MPI_Barrier(nbr_comm);
                     
                     if(size > large_msg_size_) 
