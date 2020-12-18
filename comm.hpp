@@ -541,7 +541,6 @@ class Comm
                 // execution time stats
                 MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
-                double avg_t = sum_t / sum_npairs;
                 double avg_st = sum_t / size_;
                 double t_sq = t*t;
                 double sum_tsq = 0;
@@ -612,7 +611,6 @@ class Comm
                 // execution time stats
                 MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
 
-                double avg_t = sum_t / sum_npairs;
                 double avg_st = sum_t / size_;
                 double t_sq = t*t;
                 double sum_tsq = 0;
@@ -1108,7 +1106,6 @@ class Comm
                     // execution time stats
                     MPI_Reduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, 0, nbr_comm);
 
-                    double avg_t = sum_t / tgt_deg;
                     double avg_st = sum_t / tgt_size;
                     double t_sq = t*t;
                     double sum_tsq = 0;
