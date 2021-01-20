@@ -1171,9 +1171,13 @@ class Comm
             MPI_Comm_group(comm_, &cur_grp);
             MPI_Group_incl(cur_grp, tgt_deg+1, exl_tgt.data(), &nbr_grp);
             MPI_Comm_create(comm_, nbr_grp, &nbr_comm);
-            
+            #ifndef SSTMAC 
             MPI_Group_rank(nbr_grp, &tgt_rank);
             MPI_Group_size(nbr_grp, &tgt_size);
+            #else
+            MPI_Comm_rank(nbr_comm, &tgt_rank);
+            MPI_Comm_size(nbr_comm, &tgt_size);
+            #endif
             
             if(rank_ == target_nbrhood) 
             {
@@ -1294,9 +1298,14 @@ class Comm
             MPI_Comm_group(comm_, &cur_grp);
             MPI_Group_incl(cur_grp, tgt_deg+1, exl_tgt.data(), &nbr_grp);
             MPI_Comm_create(comm_, nbr_grp, &nbr_comm);
-            
+
+            #ifndef SSTMAC
             MPI_Group_rank(nbr_grp, &tgt_rank);
             MPI_Group_size(nbr_grp, &tgt_size);
+            #else
+            MPI_Comm_rank(nbr_comm, &tgt_rank);
+            MPI_Comm_size(nbr_comm, &tgt_size);
+            #endif
 
             if(rank_ == target_nbrhood) 
             {

@@ -270,7 +270,9 @@ int main(int argc, char **argv)
     {
         std::cout << "Average execution time (in s) for running the test on " << nprocs << " processes: " 
             << (double)(t_tot/(double)nprocs) << std::endl;
+        #ifndef SSTMAC
         std::cout << "Resolution of MPI_Wtime: " << MPI_Wtick() << std::endl;
+        #endif
     }
 
     c.destroy_nbr_comm(); 
