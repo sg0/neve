@@ -18,7 +18,7 @@ else ifeq ($(ENABLE_SCOREP_TRACE),1)
 	LDAPP = $(SCOREP_INSTALL_PATH)/bin/scorep --user --nocompiler --noopenmp --nopomp --nocuda --noopenacc --noopencl --nomemory
 endif
 
-ENABLE_SSTMACRO=1
+ENABLE_SSTMACRO=0
 ifeq ($(ENABLE_SSTMACRO),1)
     SSTPATH = $(HOME)/builds/sst-macro
     CXX = $(SSTPATH)/bin/sst++
