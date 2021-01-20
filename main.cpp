@@ -81,9 +81,9 @@ static bool shrinkGraph = false;
 static float graphShrinkPercent = 0;
 
 // parse command line parameters
-static void parseCommandLine(const int argc, char * const argv[]);
+static void parseCommandLine(int argc, char** argv);
 
-int main(int argc, char *argv[])
+int main(int argc, char **argv)
 {
     double t0, t1, td, td0, td1;
 
@@ -109,6 +109,7 @@ int main(int argc, char *argv[])
     }
     else 
     {   // read input graph
+#ifndef SSTMAC
         BinaryEdgeList rm;
         if (readBalanced == true)
         {
@@ -122,6 +123,9 @@ int main(int argc, char *argv[])
         }
         else
             g = rm.read(me, nprocs, ranksPerNode, inputFileName);
+#else
+#warning "SSTMAC is defined: Trying to load external graph binaries will FAIL."
+#endif
     }
 
 #if defined(PRINT_GRAPH_EDGES)        
@@ -225,7 +229,13 @@ int main(int argc, char *argv[])
                 c.p2p_lt_snbr(processNbr);
             }
             else
+            {
+                #ifndef SSTMAC
                 c.nbr_ala_lt();
+                #else
+                #warning "SSTMAC is defined: MPI3 neighborhood collectives are turned OFF."
+                #endif
+            }
         }
 
         if (performLTTestNbrAllGather) 
@@ -240,7 +250,13 @@ int main(int argc, char *argv[])
                 c.p2p_lt_snbr(processNbr);
             }
             else
+            {
+                #ifndef SSTMAC
                 c.nbr_aga_lt();
+                #else
+                #warning "SSTMAC is defined: MPI3 neighborhood collectives are turned OFF."
+                #endif
+            }
         }
     }
 
@@ -266,7 +282,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void parseCommandLine(const int argc, char * const argv[])
+void parseCommandLine(int argc, char** const argv)
 {
   int ret;
 

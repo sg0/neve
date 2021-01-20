@@ -356,6 +356,7 @@ class BinaryEdgeList
             comm_(comm) 
         {}
         
+#ifndef SSTMAC
         // read a file and return a graph
         Graph* read(int me, int nprocs, int ranks_per_node, std::string file)
         {
@@ -364,6 +365,7 @@ class BinaryEdgeList
             MPI_Status status;
 
             // specify the number of aggregates
+            #if !defined(SSTMAC)
             MPI_Info info;
             MPI_Info_create(&info);
             int naggr = (ranks_per_node > 1) ? (nprocs/ranks_per_node) : ranks_per_node;
@@ -376,6 +378,9 @@ class BinaryEdgeList
 
             file_open_error = MPI_File_open(comm_, file.c_str(), MPI_MODE_RDONLY, info, &fh); 
             MPI_Info_free(&info);
+            #else
+            file_open_error = MPI_File_open(comm_, file.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh); 
+            #endif
 
             if (file_open_error != MPI_SUCCESS) 
             {
@@ -526,6 +531,7 @@ class BinaryEdgeList
             MPI_Bcast(mbins.data(), nprocs+1, MPI_GRAPH_TYPE, 0, comm_);
 
             // specify the number of aggregates
+            #if !defined(SSTMAC)
             MPI_Info info;
             MPI_Info_create(&info);
             int naggr = (ranks_per_node > 1) ? (nprocs/ranks_per_node) : ranks_per_node;
@@ -538,6 +544,9 @@ class BinaryEdgeList
 
             file_open_error = MPI_File_open(comm_, file.c_str(), MPI_MODE_RDONLY, info, &fh); 
             MPI_Info_free(&info);
+            #else
+            file_open_error = MPI_File_open(comm_, file.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh); 
+            #endif
 
             if (file_open_error != MPI_SUCCESS) 
             {
@@ -615,7 +624,7 @@ class BinaryEdgeList
 
             return g;
         }
-
+#endif
     private:
         GraphElem M_;
         GraphElem N_;
