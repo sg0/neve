@@ -5,7 +5,7 @@ OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
 #  add extra edges randomly on a generated graph
 # use export ASAN_OPTIONS=verbosity=1 to check ASAN output
 SNTFLAGS = -std=c++11 -fsanitize=address -O1 -fno-omit-frame-pointer
-CXXFLAGS = -std=c++11 -g $(OPTFLAGS)
+CXXFLAGS = -std=c++11 -I. -g $(OPTFLAGS)
 
 ENABLE_DUMPI_TRACE=0
 ENABLE_SCOREP_TRACE=0
