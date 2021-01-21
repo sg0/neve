@@ -301,6 +301,7 @@ class LCG
 };
 
 // locks
+#ifndef SSTMAC
 #ifdef USE_OPENMP_LOCK
 #else
 #ifdef USE_SPINLOCK 
@@ -324,6 +325,7 @@ void unlock() {
     mtx_.unlock();
 #endif
 }
+#endif // end of SSTMAC
 #endif
 
 #endif // UTILS
