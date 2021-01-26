@@ -95,6 +95,7 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &me);
 
     // command line options
+    MPI_Barrier(MPI_COMM_WORLD);
     parseCommandLine(argc, argv);
  
     Graph* g = nullptr;
@@ -287,6 +288,7 @@ int main(int argc, char **argv)
 void parseCommandLine(int argc, char** const argv)
 {
   int ret;
+  optind = 1;
 
   while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:u")) != -1) {
     switch (ret) {
