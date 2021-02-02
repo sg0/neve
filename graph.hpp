@@ -849,7 +849,7 @@ class GenerateRGG
             const int x_nup     = X_up.empty() ? 0 : n_;
             const int y_nup     = Y_up.empty() ? 0 : n_;
 
-            #ifndef SSTMAC
+            #ifndef DONT_USE_SENDRECV
             MPI_Sendrecv(X.data(), n_, MPI_WEIGHT_TYPE, up_, SR_X_UP_TAG, 
                     X_down.data(), x_ndown, MPI_WEIGHT_TYPE, down_, SR_X_UP_TAG, 
                     comm_, MPI_STATUS_IGNORE);
@@ -966,7 +966,7 @@ class GenerateRGG
             }
             
             MPI_Barrier(comm_);
-            
+           
             // communicate ghost vertices with neighbors
             // send/recv buffer sizes
             #ifndef SSTMAC 
@@ -1003,39 +1003,49 @@ class GenerateRGG
                 recvup_edges.resize(recv_sizes[0]);
             if (recv_sizes[1] > 0)
                 recvdn_edges.resize(recv_sizes[1]);
-             
+            
+            MPI_Datatype edgeType;
+            EdgeTuple einfo;
+            MPI_Aint begin, s, t, w;
+            MPI_Get_address(&einfo, &begin);
+            MPI_Get_address(&einfo.ij_[0], &s);
+            MPI_Get_address(&einfo.ij_[1], &t);
+            MPI_Get_address(&einfo.w_, &w);
+
+            int blens[] = { 1, 1, 1 };
+            MPI_Aint displ[] = { s - begin, t - begin, w - begin };
+            MPI_Datatype types[] = { MPI_GRAPH_TYPE, MPI_GRAPH_TYPE, MPI_WEIGHT_TYPE };
+
+            MPI_Type_create_struct(3, blens, displ, types, &edgeType);
+            MPI_Type_commit(&edgeType);
+
             // send/recv both up and down
-            #ifndef SSTMAC 
-            MPI_Sendrecv(sendup_edges.data(), send_sizes[0]*sizeof(struct EdgeTuple), MPI_BYTE, 
-                    up_, SR_UP_TAG, recvdn_edges.data(), recv_sizes[1]*sizeof(struct EdgeTuple), 
-                    MPI_BYTE, down_, SR_UP_TAG, comm_, MPI_STATUS_IGNORE);
-            MPI_Sendrecv(senddn_edges.data(), send_sizes[1]*sizeof(struct EdgeTuple), MPI_BYTE, 
-                    down_, SR_DOWN_TAG, recvup_edges.data(), recv_sizes[0]*sizeof(struct EdgeTuple), 
-                    MPI_BYTE, up_, SR_DOWN_TAG, comm_, MPI_STATUS_IGNORE);
+            #ifndef DONT_USE_SENDRECV
+            MPI_Sendrecv(sendup_edges.data(), send_sizes[0], edgeType, 
+                    up_, SR_UP_TAG, recvdn_edges.data(), recv_sizes[1], 
+                    edgeType, down_, SR_UP_TAG, comm_, MPI_STATUS_IGNORE);
+            MPI_Sendrecv(senddn_edges.data(), send_sizes[1], edgeType, 
+                    down_, SR_DOWN_TAG, recvup_edges.data(), recv_sizes[0], 
+                    edgeType, up_, SR_DOWN_TAG, comm_, MPI_STATUS_IGNORE);
             #else
             if (rank_ % 2 == 0)
             {
-                MPI_Send(sendup_edges.data(), send_sizes[0]*sizeof(struct EdgeTuple), MPI_BYTE, 
-                        up_, SR_UP_TAG, comm_);
-                MPI_Send(senddn_edges.data(), send_sizes[1]*sizeof(struct EdgeTuple), MPI_BYTE, 
-                        down_, SR_DOWN_TAG, comm_);
-                MPI_Recv(recvdn_edges.data(), recv_sizes[1]*sizeof(struct EdgeTuple), 
-                        MPI_BYTE, down_, SR_UP_TAG, comm_, MPI_STATUS_IGNORE);
-                MPI_Recv(recvup_edges.data(), recv_sizes[0]*sizeof(struct EdgeTuple), 
-                        MPI_BYTE, up_, SR_DOWN_TAG, comm_, MPI_STATUS_IGNORE);
+                MPI_Send(sendup_edges.data(), send_sizes[0], edgeType, up_, SR_UP_TAG, comm_);
+                MPI_Send(senddn_edges.data(), send_sizes[1], edgeType, down_, SR_DOWN_TAG, comm_);
+                MPI_Recv(recvdn_edges.data(), recv_sizes[1], edgeType, down_, SR_UP_TAG, comm_, MPI_STATUS_IGNORE);
+                MPI_Recv(recvup_edges.data(), recv_sizes[0], edgeType, up_, SR_DOWN_TAG, comm_, MPI_STATUS_IGNORE);
             }
             else
             {
-                MPI_Recv(recvdn_edges.data(), recv_sizes[1]*sizeof(struct EdgeTuple), 
-                        MPI_BYTE, down_, SR_UP_TAG, comm_, MPI_STATUS_IGNORE);
-                MPI_Recv(recvup_edges.data(), recv_sizes[0]*sizeof(struct EdgeTuple), 
-                        MPI_BYTE, up_, SR_DOWN_TAG, comm_, MPI_STATUS_IGNORE);
-                MPI_Send(sendup_edges.data(), send_sizes[0]*sizeof(struct EdgeTuple), MPI_BYTE, 
-                        up_, SR_UP_TAG, comm_);
-                MPI_Send(senddn_edges.data(), send_sizes[1]*sizeof(struct EdgeTuple), MPI_BYTE, 
-                        down_, SR_DOWN_TAG, comm_);
+                MPI_Recv(recvdn_edges.data(), recv_sizes[1], edgeType, down_, SR_UP_TAG, comm_, MPI_STATUS_IGNORE);
+                MPI_Recv(recvup_edges.data(), recv_sizes[0], edgeType, up_, SR_DOWN_TAG, comm_, MPI_STATUS_IGNORE);
+                MPI_Send(sendup_edges.data(), send_sizes[0], edgeType, up_, SR_UP_TAG, comm_);
+                MPI_Send(senddn_edges.data(), send_sizes[1], edgeType, down_, SR_DOWN_TAG, comm_);
             }
             #endif
+
+            MPI_Type_free(&edgeType);
+            
             // update local #edges
             
             // down
