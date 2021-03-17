@@ -85,8 +85,11 @@ specific runtime arguments mentioned in the next section.
 
 Pass -DPRINT_DIST_STATS while building for printing distributed graph characteristics.
 
-For the non-MPI build, it is better to keep the existing options in the Makefile intact, only 
-changing the OpenMP and other optimization flags depending on the compiler.
+For the non-MPI build, please pass a suitable value (equal to the #sockets or NUMA nodes on the 
+system) to the GRAPH_FT_LOAD macro at compile-time, like -DGRAPH_FT_LOAD=4. This is very important 
+for `first touch' purposes. It is better to keep the other options in the Makefile intact, only 
+changing the OpenMP and other optimization flags depending on the compiler. Please check the
+code (graph.hpp) for other macros of interest.
 
 *****************
 Execution options
