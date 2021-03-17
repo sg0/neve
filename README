@@ -77,11 +77,15 @@ Mahantesh Halappanavar, PNNL (hala at pnnl dot gov)
 Compile
 *******
 
-neve is a C++ header-only library and requires an MPI implementation. It uses MPI Send/Recv and 
+neve is a C++11 header-only library and requires an MPI implementation. It uses MPI Send/Recv and 
 collectives (for synthetic graph generation). Please update the Makefile with compiler flags and 
 use a C++11 compliant compiler of your choice. Invoke `make clean; make` after setting paths 
 to MPI for generating the binary. Use `mpirun` or `mpiexec` or `srun` to execute the code with 
-specific runtime arguments mentioned in the next section.
+specific runtime arguments mentioned in the next section. 
+
+It is also possible to run neve on a network simulator such as SST-Macro, please enable the 
+ENABLE_SSTMACRO shell variable in the Makefile (and pass the path to SST-Macro build), and consult 
+the SST-Macro document for running MPI codes with parameter files.
 
 Pass -DPRINT_DIST_STATS while building for printing distributed graph characteristics.
 
@@ -161,4 +165,3 @@ Possible options for non-MPI version, i.e., neve_threads (can be combined):
                       std::default_random_engine).
 4.  -p <percent>    : Only valid for synthetically generated inputs. Specify percent of overall 
                       edges to be randomly generated between vertices.
-
