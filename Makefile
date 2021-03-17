@@ -1,11 +1,13 @@
-CXX = mpicxx
+CXX = g++-10
+MPICXX = mpicxx
+
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
 OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
 # -DPRINT_EXTRA_NEDGES prints extra edges when -p <> is passed to 
 #  add extra edges randomly on a generated graph
 # use export ASAN_OPTIONS=verbosity=1 to check ASAN output
-SNTFLAGS = -std=c++11 -fsanitize=address -O1 -fno-omit-frame-pointer
-CXXFLAGS = -std=c++11 -I. -g $(OPTFLAGS)
+SNTFLAGS = -std=c++17 -fsanitize=address -O1 -fno-omit-frame-pointer
+CXXFLAGS = -std=c++17 -I. -g $(OPTFLAGS)
 
 ENABLE_DUMPI_TRACE=0
 ENABLE_SCOREP_TRACE=0
@@ -26,18 +28,31 @@ ifeq ($(ENABLE_SSTMACRO),1)
     LDFLAGS = -Wl,-rpath,$(SSTPATH)/lib
 endif
 
-OBJ = main.o
-TARGET = neve
+OBJ_MPI = main.o
+SRC_MPI = main.cpp
+TARGET_MPI = neve_mpi 
+OBJ_THREADS = main_threads.o
+SRC_THREADS = main_threads.cpp
+TARGET_THREADS = neve_threads
 
-all: $(TARGET)
+OBJS = $(OBJ_MPI) $(OBJ_THREADS)
+TARGETS = $(TARGET_MPI) $(TARGET_THREADS)
 
-$(TARGET):  $(OBJ)
-	$(LDAPP) $(CXX) -o $@ $+ $(LDFLAGS) $(CXXFLAGS) 
+all: $(TARGETS) 
 
-%.o: %.cpp
-	$(CXX) $(INCLUDE) $(CXXFLAGS) -c $< -o $@
+$(TARGET_MPI):  $(OBJ_MPI)
+	$(LDAPP) $(MPICXX) -o $@ $+ $(LDFLAGS) $(CXXFLAGS) 
+
+$(OBJ_MPI): $(SRC_MPI)
+	$(MPICXX) $(INCLUDE) $(CXXFLAGS) -c $< -o $@
+
+$(TARGET_THREADS):  $(OBJ_THREADS)
+	$(LDAPP) $(CXX) -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=1 -o $@ $+ $(LDFLAGS) $(CXXFLAGS) 
+
+$(OBJ_THREADS): $(SRC_THREADS)
+	$(CXX) $(INCLUDE) $(CXXFLAGS) -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=1 -c $< -o $@
 
 .PHONY: clean
 
 clean:
-	rm -rf *~ *.dSYM nc.vg.* $(OBJ) $(TARGET)
+	rm -rf *~ *.dSYM nc.vg.* $(OBJS) $(TARGETS)

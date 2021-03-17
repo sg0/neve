@@ -51,7 +51,6 @@
 #include <sstream>
 #include <string>
 
-#include <mpi.h>
 #include "comm.hpp"
 
 static std::string inputFileName;
@@ -136,9 +135,7 @@ int main(int argc, char **argv)
     assert(g != nullptr);
 
     MPI_Barrier(MPI_COMM_WORLD);
-#ifdef DEBUG_PRINTF  
-    assert(g);
-#endif
+
     td1 = MPI_Wtime();
     td = td1 - td0;
 
@@ -414,13 +411,13 @@ void parseCommandLine(int argc, char** const argv)
    
   if (me == 0 && !generateGraph && randomNumberLCG) 
   {
-      std::cerr << "Must specify -g for graph generation using LCG." << std::endl;
+      std::cerr << "Must specify -n for graph generation using LCG." << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
   } 
    
   if (me == 0 && !generateGraph && (randomEdgePercent > 0.0)) 
   {
-      std::cerr << "Must specify -g for graph generation first to add random edges to it." << std::endl;
+      std::cerr << "Must specify -n for graph generation first to add random edges to it." << std::endl;
       MPI_Abort(MPI_COMM_WORLD, -99);
   } 
   
