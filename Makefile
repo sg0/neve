@@ -38,9 +38,9 @@ TARGET_THREADS = neve_threads
 OBJS = $(OBJ_MPI) $(OBJ_THREADS)
 TARGETS = $(TARGET_MPI) $(TARGET_THREADS)
 
+all: $(TARGETS)
 mpi: $(TARGET_MPI)
 threads: $(TARGET_THREADS)
-all: $(TARGETS)
 
 $(TARGET_MPI):  $(OBJ_MPI)
 	$(LDAPP) $(MPICXX) -o $@ $+ $(LDFLAGS) $(CXXFLAGS) 
