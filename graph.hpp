@@ -591,7 +591,7 @@ class GenerateRGG
             } // end of (conditional) random edges addition
 
             // set graph edge indices
-            std::partial_sum(g->edge_indices_, g->edge_indices_ + (nv_ + 1), g->edge_indices_);
+            std::partial_sum(g->edge_indices_, g->edge_indices_ + (nv_+1), g->edge_indices_);
              
             for(GraphElem i = 1; i < nv_+1; i++)
                 g->edge_indices_[i] -= g->edge_indices_[0];   
