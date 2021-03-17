@@ -69,9 +69,7 @@ reports average bandwidth and latency. Like the MPI-based neve, these tests can 
 real-world (same binary format) and synthetic graphs (using the RGG generator as discussed above). 
 
 Please contact the following for any queries or support:
-
 Sayan Ghosh, PNNL (sg0 at pnnl dot gov)
-Mahantesh Halappanavar, PNNL (hala at pnnl dot gov)
 
 *******
 Compile
