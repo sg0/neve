@@ -436,12 +436,10 @@ class GenerateRGG
         Graph* generate(bool isLCG, bool unitEdgeWeight = true, GraphWeight randomEdgePercent = 0.0)
         {
             std::vector<GraphWeight> X, Y;
-            if (isLCG)
-                X.resize(2*nv_);
-            else
-                X.resize(nv_);
+
+            X.resize(nv_);
             Y.resize(nv_);
-    
+
             // create graph, edge list to be populated later
             Graph *g = new Graph(nv_);
             
@@ -472,7 +470,7 @@ class GenerateRGG
                 // e.g seeds: 1741, 3821
                 // create LCG object
                 // seed to generate x0
-                LCG xr(/*seed*/1, X.data(), 2*nv_); 
+                LCG xr(/*seed*/1, X.data(), nv_); 
                 
                 // generate random numbers between 0-1
                 xr.generate();
