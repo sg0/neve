@@ -61,9 +61,16 @@ binary file conversion. Vite could be downloaded from (please don't use the past
 link to download Vite, the following GitHub link is the correct one): 
 https://github.com/Exa-Graph/vite
 
+Recently, we have added a non-MPI shared-memory version of this microbenchmark, which is 
+inspired from the STREAM benchmark, except arrays are replaced by graphs. The graph data 
+structure is CSR, and there are two tests: `Neighborhood Scan' and `Neighborhood Sum',
+both of which scans graph neighborhood (an innate pattern for many graph workloads) and 
+reports average bandwidth and latency. Like the MPI-based neve, these tests can handle both 
+real-world (same binary format) and synthetic graphs (using the RGG generator as discussed above). 
+
 Please contact the following for any queries or support:
 
-Sayan Ghosh, PNNL (sayan dot ghosh at pnnl dot gov)
+Sayan Ghosh, PNNL (sg0 at pnnl dot gov)
 Mahantesh Halappanavar, PNNL (hala at pnnl dot gov)
 
 *******
@@ -78,17 +85,25 @@ specific runtime arguments mentioned in the next section.
 
 Pass -DPRINT_DIST_STATS while building for printing distributed graph characteristics.
 
+For the non-MPI build, it is better to keep the existing options in the Makefile intact, only 
+changing the OpenMP and other optimization flags depending on the compiler.
+
 *****************
 Execution options
 *****************
 E.g.: 
-mpiexec -n 2 bin/./neve -f karate.bin -w -t 0 -z 5
-mpiexec -n 4 bin/./neve -f karate.bin -w -t 0 -s 2 -g 5
-mpiexec -n 2 bin/./neve -l -n 100 -w 
-mpiexec -n 2 bin/./neve -n 100 -t 0
-mpiexec -n 2 bin/./neve -p 2 -n 100 -w 
 
-Possible options (can be combined):
+mpiexec -n 2 bin/./neve_mpi -f karate.bin -w -t 0 -z 5
+mpiexec -n 4 bin/./neve_mpi -f karate.bin -w -t 0 -s 2 -g 5
+mpiexec -n 2 bin/./neve_mpi -l -n 100 -w 
+mpiexec -n 2 bin/./neve_mpi -n 100 -t 0
+mpiexec -n 2 bin/./neve_mpi -p 2 -n 100 -w 
+
+bin/./neve_threads -n 64
+bin/./neve_threads -f karate.bin
+bin/./neve_threads -p 2 -n 100 
+
+Possible options for MPI version, i.e., neve_mpi (can be combined):
 
 1.  -f <bin-file>   : Specify input binary file after this argument. 
 2.  -b              : Only valid for real-world inputs. Attempts to distribute approximately 
@@ -131,3 +146,16 @@ Possible options (can be combined):
 structure. This is deliberate, in case we want to measure the overhead of loading a graph and 
 time only the file I/O part (like measuring the impact of different #aggregators through the 
 -r <nranks> option).
+
+
+Possible options for non-MPI version, i.e., neve_threads (can be combined):
+
+1.  -f <bin-file>   : Specify input binary file after this argument. 
+2.  -n <vertices>   : Only valid for synthetically generated inputs. Pass total number of 
+                      vertices of the generated graph.
+3.  -l              : Use distributed LCG for randomly choosing edges. If this option 
+                      is not used, we will use C++ random number generator (using 
+                      std::default_random_engine).
+4.  -p <percent>    : Only valid for synthetically generated inputs. Specify percent of overall 
+                      edges to be randomly generated between vertices.
+
