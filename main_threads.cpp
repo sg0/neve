@@ -99,10 +99,10 @@ int main(int argc, char **argv)
     td = td1 - td0;
 
     if (!generateGraph)
-        std::cout << "Time to read input file and create distributed graph (in s): " 
+        std::cout << "Time to read input file and create graph (in s): " 
             << td << std::endl;
     else
-        std::cout << "Time to generate distributed graph of " 
+        std::cout << "Time to generate graph of " 
             << nvRGG << " vertices (in s): " << td << std::endl;
 
     // nbrscan: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
