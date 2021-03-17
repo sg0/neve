@@ -125,7 +125,7 @@ int main(int argc, char **argv)
         ( (double) (count_nbrscan) / 1024.0),
         ( (double) (count_nbrscan) / 1024.0/1024.0),
         ( (double) (count_nbrscan) / 1024.0/1024.0/1024.0));
-    std::printf("Total memory required (Neighbor Sum) = %.1f KiB = %.1f MiB = %.1f GiB.\n",
+    std::printf("Total memory required (Neighbor Sum ) = %.1f KiB = %.1f MiB = %.1f GiB.\n",
         ( (double) (count_nbrsum) / 1024.0),
         ( (double) (count_nbrsum) / 1024.0/1024.0),
         ( (double) (count_nbrsum) / 1024.0/1024.0/1024.0));
