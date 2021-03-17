@@ -95,7 +95,15 @@ class Graph
                  edge_indices_(nullptr), edge_list_(nullptr),
                  vertex_degree_(nullptr), edge_weights_(nullptr)
         {}
-        
+                
+        Graph(GraphElem nv): 
+            nv_(nv), ne_(-1), 
+            edge_list_(nullptr), edge_weights_(nullptr)
+        {
+            edge_indices_   = new GraphElem[nv_+1];
+            vertex_degree_  = new GraphWeight[nv_];
+        }
+
         Graph(GraphElem nv, GraphElem ne): 
             nv_(nv), ne_(ne) 
         {
@@ -134,8 +142,8 @@ class Graph
         void set_nedges(GraphElem ne) 
         { 
             ne_ = ne; 
-            delete []edge_list_;
-            edge_list_ = new Edge[ne_];
+            edge_list_      = new Edge[ne_];
+            edge_weights_   = new GraphWeight[ne_];
         }
 
         GraphElem get_nv() const { return nv_; }
@@ -428,11 +436,14 @@ class GenerateRGG
         Graph* generate(bool isLCG, bool unitEdgeWeight = true, GraphWeight randomEdgePercent = 0.0)
         {
             std::vector<GraphWeight> X, Y;
-            X.resize(nv_);
+            if (isLCG)
+                X.resize(2*nv_);
+            else
+                X.resize(nv_);
             Y.resize(nv_);
     
             // create graph, edge list to be populated later
-            Graph *g = new Graph(nv_, 0);
+            Graph *g = new Graph(nv_);
             
             // measure the time to generate random numbers
             double st = omp_get_wtime();
@@ -442,12 +453,14 @@ class GenerateRGG
                 seed = (unsigned)reseeder(1);
 
 #if defined(PRINT_RANDOM_XY_COORD)
+                #pragma omp parallel for
                 for (GraphElem i = 0; i < nv_; i++) {
                     X[i] = genRandom<GraphWeight>(0.0, 1.0);
                     Y[i] = genRandom<GraphWeight>(0.0, 1.0);
                     std::cout << "X, Y: " << X[i] << ", " << Y[i] << std::endl;
                 }
 #else
+                #pragma omp parallel for
                 for (GraphElem i = 0; i < nv_; i++) {
                     X[i] = genRandom<GraphWeight>(0.0, 1.0);
                     Y[i] = genRandom<GraphWeight>(0.0, 1.0);
@@ -459,7 +472,7 @@ class GenerateRGG
                 // e.g seeds: 1741, 3821
                 // create LCG object
                 // seed to generate x0
-                LCG xr(/*seed*/1, X.data(), nv_); 
+                LCG xr(/*seed*/1, X.data(), 2*nv_); 
                 
                 // generate random numbers between 0-1
                 xr.generate();
@@ -579,11 +592,8 @@ class GenerateRGG
 #endif
             } // end of (conditional) random edges addition
 
-  
             // set graph edge indices
-            std::vector<GraphElem> ecTmp(nv_+1);
-            std::partial_sum(g->edge_indices_, g->edge_indices_ + (nv_ + 1), ecTmp.begin());
-            std::memcpy(ecTmp.data(), g->edge_indices_, sizeof(GraphElem)*(nv_ + 1));
+            std::partial_sum(g->edge_indices_, g->edge_indices_ + (nv_ + 1), g->edge_indices_);
              
             for(GraphElem i = 1; i < nv_+1; i++)
                 g->edge_indices_[i] -= g->edge_indices_[0];   
@@ -1841,10 +1851,7 @@ class GenerateRGG
             MPI_Barrier(comm_);
   
             // set graph edge indices
-            
-            std::vector<GraphElem> ecTmp(n_+1);
-            std::partial_sum(g->edge_indices_.begin(), g->edge_indices_.end(), ecTmp.begin());
-            g->edge_indices_ = ecTmp;
+            std::partial_sum(g->edge_indices_.begin(), g->edge_indices_.end(), g->edge_indices_.begin());
              
             for(GraphElem i = 1; i < n_+1; i++)
                 g->edge_indices_[i] -= g->edge_indices_[0];   
