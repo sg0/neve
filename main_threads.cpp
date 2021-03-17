@@ -190,7 +190,7 @@ void parseCommandLine(int argc, char** const argv)
   int ret;
   optind = 1;
 
-  while ((ret = getopt(argc, argv, "f:n:lp")) != -1) {
+  while ((ret = getopt(argc, argv, "f:n:lp:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);

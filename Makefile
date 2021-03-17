@@ -6,8 +6,8 @@ OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
 # -DPRINT_EXTRA_NEDGES prints extra edges when -p <> is passed to 
 #  add extra edges randomly on a generated graph
 # use export ASAN_OPTIONS=verbosity=1 to check ASAN output
-SNTFLAGS = -std=c++17 -fsanitize=address -O1 -fno-omit-frame-pointer
-CXXFLAGS = -std=c++17 -I. -g $(OPTFLAGS)
+SNTFLAGS = -std=c++11 -fsanitize=address -O1 -fno-omit-frame-pointer
+CXXFLAGS = -std=c++11 -I. -g $(OPTFLAGS)
 
 ENABLE_DUMPI_TRACE=0
 ENABLE_SCOREP_TRACE=0
