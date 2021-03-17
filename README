@@ -92,8 +92,15 @@ Pass -DPRINT_DIST_STATS while building for printing distributed graph characteri
 For the non-MPI build on real-world graphs, please pass a suitable value (equal to the #sockets 
 or NUMA nodes on the system) to the GRAPH_FT_LOAD macro at compile-time, like -DGRAPH_FT_LOAD=4. 
 This is very important for `first touch' purposes, but has no effect when RGG codepath is selected. 
+Also, our edge data structure consists of a vertex end-point and weight, optionally we support
+an edge data structure consisting of a head, tail and weight (vertex pair). In order to enable the
+edge data structure that stores a `vertex pair', -DEDGE_AS_VERTEX_PAIR must be passed (this is 
+option also supports the binary file format of Grappolo*).
+
 It is better to keep the other options in the Makefile intact, only changing the OpenMP and other 
 optimization flags depending on the compiler. Please check the code to review other macros of interest.
+
+[*] https://github.com/Exa-Graph/grappolo
 
 *****************
 Execution options

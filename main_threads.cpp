@@ -109,11 +109,18 @@ int main(int argc, char **argv)
     // nbrsum : 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
     const GraphElem nv = g->get_nv();
     const GraphElem ne = g->get_ne();
+#ifdef EDGE_AS_VERTEX_PAIR
+    const std::size_t count_nbrscan = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) 
+        + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight)); 
+    const std::size_t count_nbrsum = 2*nv*sizeof(GraphElem) + 3*ne*sizeof(GraphWeight) 
+        + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight));
+#else
     const std::size_t count_nbrscan = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) 
         + 2*ne*(sizeof(GraphElem) + sizeof(GraphWeight)); 
     const std::size_t count_nbrsum = 2*nv*sizeof(GraphElem) + 3*ne*sizeof(GraphWeight) 
         + 2*ne*(sizeof(GraphElem) + sizeof(GraphWeight));
-    
+#endif
+
     std::printf("Total memory required (Neighbor Scan) = %.1f KiB = %.1f MiB = %.1f GiB.\n",
         ( (double) (count_nbrscan) / 1024.0),
         ( (double) (count_nbrscan) / 1024.0/1024.0),

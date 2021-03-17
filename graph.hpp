@@ -62,6 +62,15 @@
 
 unsigned seed;
 
+#ifdef EDGE_AS_VERTEX_PAIR
+struct Edge
+{
+    GraphElem head_, tail_;
+    GraphWeight weight_;
+    
+    Edge(): head_(-1), tail_(-1), weight_(0.0) {}
+};
+#else
 struct Edge
 {
     GraphElem tail_;
@@ -69,6 +78,7 @@ struct Edge
     
     Edge(): tail_(-1), weight_(0.0) {}
 };
+#endif
 
 struct EdgeTuple
 {
@@ -256,6 +266,13 @@ class Graph
                     pdeg[v] += 1;
             }
             
+            std::sort(pdeg.begin(), pdeg.end());
+	    GraphWeight loc = (GraphWeight)(nv_ + 1)/2.0;
+	    GraphElem median;
+	    if (fmod(loc, 1) != 0)
+		    median = pdeg[(GraphElem)loc]; 
+	    else
+		    median = (pdeg[(GraphElem)floor(loc)] + pdeg[((GraphElem)floor(loc)+1)]) / 2;
             GraphElem spdeg = std::accumulate(pdeg.begin(), pdeg.end(), 0);
             GraphElem mpdeg = *(std::max_element(pdeg.begin(), pdeg.end()));
             std::transform(pdeg.cbegin(), pdeg.cend(), pdeg.cbegin(),
@@ -275,7 +292,7 @@ class Graph
             std::cout << "Number of vertices: " << nv_ << std::endl;
             std::cout << "Number of edges: " << ne_ << std::endl;
             std::cout << "Maximum number of edges: " << mpdeg << std::endl;
-            std::cout << "Average number of edges: " << paverage << std::endl;
+            std::cout << "Median number of edges: " << median << std::endl;
             std::cout << "Expected value of X^2: " << pavg_sq << std::endl;
             std::cout << "Variance: " << pvar << std::endl;
             std::cout << "Standard deviation: " << pstddev << std::endl;
@@ -314,7 +331,11 @@ class BinaryEdgeList
             // read the dimensions 
             file.read(reinterpret_cast<char*>(&M_), sizeof(GraphElem));
             file.read(reinterpret_cast<char*>(&N_), sizeof(GraphElem));
-
+#ifdef EDGE_AS_VERTEX_PAIR
+            GraphElem weighted;
+	    file.read(reinterpret_cast<char*>(&weighted), sizeof(GraphElem));
+	    N_ *= 2;
+#endif
             // create local graph
             Graph *g = new Graph(M_, N_);
 

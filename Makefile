@@ -1,13 +1,15 @@
-CXX = g++-10
+CXX = icpc
 MPICXX = mpicxx
 
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
-OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
+OPTFLAGS = -O3 -xHost -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
 # -DPRINT_EXTRA_NEDGES prints extra edges when -p <> is passed to 
 #  add extra edges randomly on a generated graph
 # use export ASAN_OPTIONS=verbosity=1 to check ASAN output
 SNTFLAGS = -std=c++11 -fsanitize=address -O1 -fno-omit-frame-pointer
 CXXFLAGS = -std=c++11 -g -I. $(OPTFLAGS)
+CXXFLAGS_THREADS = -qopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DEDGE_AS_VERTEX_PAIR
+CXXFLAGS_MPI = 
 
 ENABLE_DUMPI_TRACE=0
 ENABLE_SCOREP_TRACE=0
@@ -49,10 +51,10 @@ $(OBJ_MPI): $(SRC_MPI)
 	$(MPICXX) $(INCLUDE) $(CXXFLAGS) -c $< -o $@
 
 $(TARGET_THREADS):  $(OBJ_THREADS)
-	$(LDAPP) $(CXX) -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=1 -o $@ $+ $(LDFLAGS) $(CXXFLAGS) 
+	$(LDAPP) $(CXX) $(CXXFLAGS_THREADS) -o $@ $+ $(LDFLAGS) $(CXXFLAGS) 
 
 $(OBJ_THREADS): $(SRC_THREADS)
-	$(CXX) $(INCLUDE) $(CXXFLAGS) -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=1 -c $< -o $@
+	$(CXX) $(INCLUDE) $(CXXFLAGS) $(CXXFLAGS_THREADS) -c $< -o $@
 
 .PHONY: clean mpi threads
 
