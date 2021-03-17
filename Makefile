@@ -38,7 +38,9 @@ TARGET_THREADS = neve_threads
 OBJS = $(OBJ_MPI) $(OBJ_THREADS)
 TARGETS = $(TARGET_MPI) $(TARGET_THREADS)
 
-all: $(TARGETS) 
+mpi: $(TARGET_MPI)
+threads: $(TARGET_THREADS)
+all: $(TARGETS)
 
 $(TARGET_MPI):  $(OBJ_MPI)
 	$(LDAPP) $(MPICXX) -o $@ $+ $(LDFLAGS) $(CXXFLAGS) 
@@ -52,7 +54,7 @@ $(TARGET_THREADS):  $(OBJ_THREADS)
 $(OBJ_THREADS): $(SRC_THREADS)
 	$(CXX) $(INCLUDE) $(CXXFLAGS) -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=1 -c $< -o $@
 
-.PHONY: clean
+.PHONY: clean mpi threads
 
 clean:
 	rm -rf *~ *.dSYM nc.vg.* $(OBJS) $(TARGETS)
