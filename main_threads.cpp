@@ -151,7 +151,7 @@ int main(int argc, char **argv)
     std::printf("Each test below will take on the order"
         " of %d microseconds.\n", (int) t0);
     std::printf("   (= %d clock ticks)\n", (int) (t0/quantum) );
-    std::printf("Increase the size of the arrays if this shows that\n");
+    std::printf("Increase the size of the graph if this shows that\n");
     std::printf("you are not getting at least 20 clock ticks per test.\n");
 
     double times[2][NTIMES]; 
