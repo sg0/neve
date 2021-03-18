@@ -30,6 +30,7 @@ ifeq ($(ENABLE_SSTMACRO),1)
     LDFLAGS = -Wl,-rpath,$(SSTPATH)/lib -L$(SSTPATH)/lib
 endif
 
+# https://software.llnl.gov/Caliper/services.html
 ENABLE_LLNL_CALIPER=0
 ifeq ($(ENABLE_LLNL_CALIPER), 1)
 CALI_PATH = $(HOME)/builds/caliper
