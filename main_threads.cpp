@@ -104,10 +104,10 @@ int main(int argc, char **argv)
     td = td1 - td0;
 
     if (!generateGraph)
-        std::cout << "Time to read input file and create distributed graph (in s): " 
+        std::cout << "Time to read input file and create graph (in s): " 
             << td << std::endl;
     else
-        std::cout << "Time to generate distributed graph of " 
+        std::cout << "Time to generate graph of " 
             << nvRGG << " vertices (in s): " << td << std::endl;
 
 #ifdef LLNL_CALIPER_ENABLE
@@ -134,7 +134,7 @@ int main(int argc, char **argv)
         ( (double) (count_nbrscan) / 1024.0),
         ( (double) (count_nbrscan) / 1024.0/1024.0),
         ( (double) (count_nbrscan) / 1024.0/1024.0/1024.0));
-    std::printf("Total memory required (Neighbor Sum) = %.1f KiB = %.1f MiB = %.1f GiB.\n",
+    std::printf("Total memory required (Neighbor Sum ) = %.1f KiB = %.1f MiB = %.1f GiB.\n",
         ( (double) (count_nbrsum) / 1024.0),
         ( (double) (count_nbrsum) / 1024.0/1024.0),
         ( (double) (count_nbrsum) / 1024.0/1024.0/1024.0));
