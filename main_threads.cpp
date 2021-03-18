@@ -52,6 +52,11 @@
 #include <sstream>
 #include <string>
 
+#ifdef LLNL_CALIPER_ENABLE
+#include <caliper/cali.h>
+#include <caliper/cali-manager.h>
+#endif
+
 #include "graph.hpp"
 
 // A lot of print diagnostics is lifted from
@@ -105,6 +110,10 @@ int main(int argc, char **argv)
         std::cout << "Time to generate distributed graph of " 
             << nvRGG << " vertices (in s): " << td << std::endl;
 
+#ifdef LLNL_CALIPER_ENABLE
+    cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
+#endif
+
     // nbrscan: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
     // nbrsum : 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
     const GraphElem nv = g->get_nv();
@@ -129,10 +138,13 @@ int main(int argc, char **argv)
         ( (double) (count_nbrsum) / 1024.0),
         ( (double) (count_nbrsum) / 1024.0/1024.0),
         ( (double) (count_nbrsum) / 1024.0/1024.0/1024.0));
-    
+
+#ifdef LLNL_CALIPER_ENABLE
+#else 
     std::printf("Each kernel will be executed %d times.\n", NTIMES);
     std::printf(" The *best* time for each kernel (excluding the first iteration)\n");
     std::printf(" will be used to compute the reported bandwidth.\n");
+#endif
 
     int quantum;
     if  ( (quantum = omp_get_wtick()) >= 1)
@@ -154,6 +166,10 @@ int main(int argc, char **argv)
     std::printf("Increase the size of the graph if this shows that\n");
     std::printf("you are not getting at least 20 clock ticks per test.\n");
 
+#ifdef LLNL_CALIPER_ENABLE
+        g->nbrscan();
+        g->nbrsum();
+#else
     double times[2][NTIMES]; 
     double avgtime[2] = {0}, maxtime[2] = {0}, mintime[2] = {FLT_MAX,FLT_MAX};
 
@@ -188,6 +204,7 @@ int main(int argc, char **argv)
                 1.0E-06 * bytes[j]/mintime[j], avgtime[j], mintime[j],
                 maxtime[j]);
     }
+#endif
     
     return 0;
 }

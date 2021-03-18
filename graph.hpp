@@ -203,6 +203,10 @@ class Graph
         // Memory: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
         inline void nbrscan() 
         {
+#ifdef LLNL_CALIPER_ENABLE
+	    CALI_MARK_BEGIN("nbrscan");
+	    CALI_MARK_BEGIN("parallel");
+#endif
             GraphElem e0, e1;
 #ifdef ENABLE_PREFETCH
 #ifdef __INTEL_COMPILER
@@ -225,11 +229,19 @@ class Graph
                     edge_weights_[e] = edge.weight_;
                 }
             }
+#ifdef LLNL_CALIPER_ENABLE
+	    CALI_MARK_END("parallel");
+	    CALI_MARK_END("nbrscan");
+#endif
         }
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
         inline void nbrsum() 
         {
+#ifdef LLNL_CALIPER_ENABLE
+	    CALI_MARK_BEGIN("nbrsum");
+	    CALI_MARK_BEGIN("parallel");
+#endif
             GraphElem e0, e1;
 #ifdef ENABLE_PREFETCH
 #ifdef __INTEL_COMPILER
@@ -252,6 +264,10 @@ class Graph
                     vertex_degree_[i] += edge.weight_;
                 }
             }
+#ifdef LLNL_CALIPER_ENABLE
+	    CALI_MARK_END("parallel");
+	    CALI_MARK_END("nbrsum");
+#endif
         }
 
         // print statistics about edge distribution

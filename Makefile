@@ -8,7 +8,7 @@ OPTFLAGS = -O3 -xHost -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
 # use export ASAN_OPTIONS=verbosity=1 to check ASAN output
 SNTFLAGS = -std=c++11 -fsanitize=address -O1 -fno-omit-frame-pointer
 CXXFLAGS = -std=c++11 -g -I. $(OPTFLAGS)
-CXXFLAGS_THREADS = -qopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DEDGE_AS_VERTEX_PAIR
+CXXFLAGS_THREADS = -qopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
 CXXFLAGS_MPI = 
 
 ENABLE_DUMPI_TRACE=0
@@ -27,7 +27,14 @@ ifeq ($(ENABLE_SSTMACRO),1)
     SSTPATH = $(HOME)/builds/sst-macro
     CXX = $(SSTPATH)/bin/sst++
     CXXFLAGS += -fPIC -DSSTMAC -I$(SSTPATH)/include
-    LDFLAGS = -Wl,-rpath,$(SSTPATH)/lib
+    LDFLAGS = -Wl,-rpath,$(SSTPATH)/lib -L$(SSTPATH)/lib
+endif
+
+ENABLE_LLNL_CALIPER=1
+ifeq ($(ENABLE_LLNL_CALIPER), 1)
+CALI_PATH = $(HOME)/builds/caliper
+CXXFLAGS += -DLLNL_CALIPER_ENABLE -I$(CALI_PATH)/include
+LDFLAGS = -Wl,-rpath,$(CALI_PATH)/lib -L$(CALI_PATH)/lib -lcaliper
 endif
 
 OBJ_MPI = main.o
