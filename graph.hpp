@@ -217,17 +217,31 @@ class Graph
 #endif
 #ifdef USE_OMP_DYNAMIC
 #pragma omp parallel for private(e0, e1) schedule(dynamic)
+#elif defined USE_OMP_TASKLOOP_MASTER
+#pragma omp parallel private(e0, e1)
+#pragma omp master
+#pragma omp taskloop
+#elif defined USE_OMP_TASKS_FOR
+#pragma omp parallel private(e0, e1)
+#pragma omp for
 #else
 #pragma omp parallel for private(e0, e1)
 #endif
             for (GraphElem i = 0; i < nv_; i++)
             {
+#ifdef USE_OMP_TASKS_FOR
+                #pragma omp task
+		    {
+#endif
                 edge_range(i, e0, e1);
                 for (GraphElem e = e0; e < e1; e++)
                 {
                     Edge const& edge = get_edge(e);
                     edge_weights_[e] = edge.weight_;
                 }
+#ifdef USE_OMP_TASKS_FOR
+		    }
+#endif
             }
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_END("parallel");
@@ -252,17 +266,31 @@ class Graph
 #endif
 #ifdef USE_OMP_DYNAMIC
 #pragma omp parallel for private(e0, e1) schedule(dynamic)
+#elif defined USE_OMP_TASKLOOP_MASTER
+#pragma omp parallel private(e0, e1)
+#pragma omp master
+#pragma omp taskloop
+#elif defined USE_OMP_TASKS_FOR
+#pragma omp parallel private(e0, e1)
+#pragma omp for
 #else
 #pragma omp parallel for private(e0, e1)
 #endif
             for (GraphElem i = 0; i < nv_; i++)
             {
+#ifdef USE_OMP_TASKS_FOR
+                #pragma omp task
+		    {
+#endif
                 edge_range(i, e0, e1);
                 for (GraphElem e = e0; e < e1; e++)
                 {
                     Edge const& edge = get_edge(e);
                     vertex_degree_[i] += edge.weight_;
                 }
+#ifdef USE_OMP_TASKS_FOR
+		    }
+#endif
             }
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_END("parallel");
