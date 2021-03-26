@@ -80,6 +80,23 @@ struct Edge
 };
 #endif
 
+#if defined(USE_SHARED_MEMORY) && defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+#ifndef CACHE_LINE_SIZE_BYTES
+#define CACHE_LINE_SIZE_BYTES   256
+#endif
+/* The zfill distance must be large enough to be ahead of the L2 prefetcher */
+static const int ZFILL_DISTANCE = 100;
+
+/* x-byte cache lines */
+static const int ELEMS_PER_CACHE_LINE = CACHE_LINE_SIZE_BYTES / sizeof(GraphWeight);
+
+/* Offset from a[j] to zfill */
+static const int ZFILL_OFFSET = ZFILL_DISTANCE * ELEMS_PER_CACHE_LINE;
+
+static inline void zfill(GraphWeight * a) 
+{ asm volatile("dc zva, %0": : "r"(a)); }
+#endif
+
 struct EdgeTuple
 {
     GraphElem ij_[2];
@@ -200,6 +217,21 @@ class Graph
             }
         }
 
+	inline void ft_init()
+	{
+#pragma omp parallel for schedule(static)
+            for (GraphElem i = 0; i < nv_; i++)
+	    {
+	        GraphElem e0, e1;
+		edge_range(i, e0, e1);
+		vertex_degree_[i] = 0.0;
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    edge_weights_[e] = 0.0;
+                }
+	    }
+	}
+
         // Memory: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
         inline void nbrscan() 
         {
@@ -297,8 +329,8 @@ class Graph
 	    CALI_MARK_END("nbrsum");
 #endif
         }
-
-        // print statistics about edge distribution
+        
+	// print statistics about edge distribution
         void print_stats()
         {
             std::vector<GraphElem> pdeg(nv_, 0);
