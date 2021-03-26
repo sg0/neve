@@ -139,10 +139,6 @@ int main(int argc, char **argv)
         ( (double) (count_nbrsum) / 1024.0/1024.0),
         ( (double) (count_nbrsum) / 1024.0/1024.0/1024.0));
 
-#if defined(ENABLE_FT_INIT) && defined(GRAPH_FT_LOAD) && GRAPH_FT_LOAD > 1
-    g->ft_init();
-    std::printf("First-Touch initialized.\n");
-#endif
 #ifdef LLNL_CALIPER_ENABLE
 #else 
     std::printf("Each kernel will be executed %d times.\n", NTIMES);

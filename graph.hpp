@@ -217,21 +217,6 @@ class Graph
             }
         }
 
-	inline void ft_init()
-	{
-#pragma omp parallel for schedule(static)
-            for (GraphElem i = 0; i < nv_; i++)
-	    {
-	        GraphElem e0, e1;
-		edge_range(i, e0, e1);
-		vertex_degree_[i] = 0.0;
-                for (GraphElem e = e0; e < e1; e++)
-                {
-                    edge_weights_[e] = 0.0;
-                }
-	    }
-	}
-
         // Memory: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
         inline void nbrscan() 
         {
