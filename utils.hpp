@@ -70,6 +70,9 @@
 #ifndef ALIGNMENT
 #   define ALIGNMENT    16
 #endif
+#ifndef DEFAULT_NV
+#define DEFAULT_NV      524288
+#endif
 #else
 #define SR_UP_TAG                   100
 #define SR_DOWN_TAG                 101

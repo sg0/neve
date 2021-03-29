@@ -1,4 +1,4 @@
-CXX = armclang++
+CXX = g++-10
 MPICXX = mpicxx
 
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
@@ -9,7 +9,7 @@ OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
 SNTFLAGS = -std=c++11 -fsanitize=address -O1 -fno-omit-frame-pointer
 #CXXFLAGS = -std=c++11 -g -I. $(OPTFLAGS)
 CXXFLAGS = -g -I. $(OPTFLAGS)
-CXXFLAGS_THREADS = -fopenmp -march=armv8+sve -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
+CXXFLAGS_THREADS = -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
 CXXFLAGS_MPI = 
 
 ENABLE_DUMPI_TRACE=0

@@ -214,26 +214,35 @@ void parseCommandLine(int argc, char** const argv)
   int ret;
   optind = 1;
 
-  while ((ret = getopt(argc, argv, "f:n:lp:")) != -1) {
-    switch (ret) {
-    case 'f':
-      inputFileName.assign(optarg);
-      break;
-    case 'n':
-      nvRGG = atol(optarg);
-      if (nvRGG > 0)
-          generateGraph = true; 
-      break;
-    case 'l':
-      randomNumberLCG = true;
-      break;
-    case 'p':
-      randomEdgePercent = atof(optarg);
-      break;
-    default:
-      assert(0 && "Should not reach here!!");
-      break;
-    }
+  if (argc == 1)
+  {
+      nvRGG = DEFAULT_NV;
+      generateGraph = (nvRGG > 0)? true : false; 
+  }
+  else
+  {
+      while ((ret = getopt(argc, argv, "f:n:lp:")) != -1) 
+      {
+          switch (ret) {
+              case 'f':
+                  inputFileName.assign(optarg);
+                  break;
+              case 'n':
+                  nvRGG = atol(optarg);
+                  if (nvRGG > 0)
+                      generateGraph = true; 
+                  break;
+              case 'l':
+                  randomNumberLCG = true;
+                  break;
+              case 'p':
+                  randomEdgePercent = atof(optarg);
+                  break;
+              default:
+                  std::cout << "Please check the passed options." << std::endl;
+                  break;
+          }
+      }
   }
 
   if (!generateGraph && inputFileName.empty()) 
