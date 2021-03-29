@@ -213,6 +213,7 @@ void parseCommandLine(int argc, char** const argv)
 {
   int ret;
   optind = 1;
+  bool help_text = false;
 
   if (argc == 1)
   {
@@ -221,7 +222,7 @@ void parseCommandLine(int argc, char** const argv)
   }
   else
   {
-      while ((ret = getopt(argc, argv, "f:n:lp:")) != -1) 
+      while ((ret = getopt(argc, argv, "f:n:lp:h")) != -1) 
       {
           switch (ret) {
               case 'f':
@@ -238,12 +239,20 @@ void parseCommandLine(int argc, char** const argv)
               case 'p':
                   randomEdgePercent = atof(optarg);
                   break;
+              case 'h':
+                  std::cout << "Usage [1] (use real-world file): ./neve_threads [-l] [-f /path/to/binary/file.bin] (see README)" << std::endl;
+                  std::cout << "Usage [2] (use synthetic graph): ./neve_threads [-n <#vertices>] [-l] [-p <\% extra edges>]" << std::endl;
+                  help_text = true;
+                  break;
               default:
                   std::cout << "Please check the passed options." << std::endl;
                   break;
           }
       }
   }
+
+  if (help_text)
+      std::exit(EXIT_SUCCESS);
 
   if (!generateGraph && inputFileName.empty()) 
   {
