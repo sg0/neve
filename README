@@ -181,4 +181,4 @@ Possible options for non-MPI version, i.e., neve_threads (can be combined):
                       std::default_random_engine).
 4.  -p <percent>    : Only valid for synthetically generated inputs. Specify percent of overall 
                       edges to be randomly generated between vertices.
-5. -h               : Print run options.                      
+5.  -h              : Print run options.                      
