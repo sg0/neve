@@ -87,11 +87,19 @@ the SST-Macro document for running MPI codes with parameter files.
 
 Pass -DPRINT_DIST_STATS while building for printing distributed graph characteristics.
 
+[Specific instructions for neve_threads] 
+
 For the non-MPI build on real-world graphs, please pass a suitable value (equal to the #sockets 
 or NUMA nodes on the system) to the GRAPH_FT_LOAD macro at compile-time, like -DGRAPH_FT_LOAD=4. 
 This is very important for `first touch' purposes, but has no effect when RGG codepath is selected. 
 We are yet to enable first touch When the synthetic graph option is selected (i.e., RGG codepath),
-since the graph generation part is serial. This would be corrected in a future commit.
+since the graph generation part is serial. This would be enabled in a future commit.
+
+We have also enabled default parameters such that executing without any arguments will work. STREAM 
+by default initiates an array of 10,000,000 elements, so we have set the default graph (one that would 
+get generated if you just invoke ./neve_threads) to have dimensions such that it would generate about 
+10M edges. The graph generation part is serial, so large graphs can take significantly longer to generate 
+(but we believe reasonable sized graphs can be generated fairly quickly).
 
 Also, our edge data structure consists of a vertex end-point and weight, optionally we support
 an edge data structure consisting of a head, tail and weight (vertex pair). In order to enable the
@@ -173,3 +181,4 @@ Possible options for non-MPI version, i.e., neve_threads (can be combined):
                       std::default_random_engine).
 4.  -p <percent>    : Only valid for synthetically generated inputs. Specify percent of overall 
                       edges to be randomly generated between vertices.
+5. -h               : Print run options.                      
