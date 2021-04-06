@@ -233,16 +233,16 @@ class Graph
 #endif
 #endif
 #ifdef USE_OMP_DYNAMIC
-#pragma omp parallel for private(e0, e1) schedule(dynamic)
+#pragma omp parallel for schedule(dynamic)
 #elif defined USE_OMP_TASKLOOP_MASTER
-#pragma omp parallel private(e0, e1)
+#pragma omp parallel
 #pragma omp master
 #pragma omp taskloop
 #elif defined USE_OMP_TASKS_FOR
-#pragma omp parallel private(e0, e1)
+#pragma omp parallel
 #pragma omp for
 #else
-#pragma omp parallel for private(e0, e1)
+#pragma omp parallel for
 #endif
             for (GraphElem i = 0; i < nv_; i++)
             {
@@ -250,10 +250,9 @@ class Graph
                 #pragma omp task
 		    {
 #endif
-                edge_range(i, e0, e1);
-                for (GraphElem e = e0; e < e1; e++)
+                for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
-                    Edge const& edge = get_edge(e);
+                    Edge const& edge = edge_list_[e];
                     edge_weights_[e] = edge.weight_;
                 }
 #ifdef USE_OMP_TASKS_FOR
@@ -282,16 +281,16 @@ class Graph
 #endif
 #endif
 #ifdef USE_OMP_DYNAMIC
-#pragma omp parallel for private(e0, e1) schedule(dynamic)
+#pragma omp parallel for schedule(dynamic)
 #elif defined USE_OMP_TASKLOOP_MASTER
-#pragma omp parallel private(e0, e1)
+#pragma omp parallel
 #pragma omp master
 #pragma omp taskloop
 #elif defined USE_OMP_TASKS_FOR
-#pragma omp parallel private(e0, e1)
+#pragma omp parallel
 #pragma omp for
 #else
-#pragma omp parallel for private(e0, e1)
+#pragma omp parallel for
 #endif
             for (GraphElem i = 0; i < nv_; i++)
             {
@@ -299,10 +298,9 @@ class Graph
                 #pragma omp task
 		    {
 #endif
-                edge_range(i, e0, e1);
-                for (GraphElem e = e0; e < e1; e++)
+                for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
-                    Edge const& edge = get_edge(e);
+                    Edge const& edge = edge_list_[e];
                     vertex_degree_[i] += edge.weight_;
                 }
 #ifdef USE_OMP_TASKS_FOR
