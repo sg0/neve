@@ -312,6 +312,58 @@ class Graph
 	    CALI_MARK_END("nbrsum");
 #endif
         }
+
+        // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
+        inline void nbrmax() 
+        {
+#ifdef LLNL_CALIPER_ENABLE
+	    CALI_MARK_BEGIN("nbrmax");
+	    CALI_MARK_BEGIN("parallel");
+#endif
+            GraphElem e0, e1;
+#ifdef ENABLE_PREFETCH
+#ifdef __INTEL_COMPILER
+#pragma noprefetch vertex_degree_
+#pragma prefetch edge_indices_:3
+#pragma prefetch edge_list_:3
+#endif
+#endif
+#ifdef USE_OMP_DYNAMIC
+#pragma omp parallel for schedule(dynamic)
+#elif defined USE_OMP_TASKLOOP_MASTER
+#pragma omp parallel
+#pragma omp master
+#pragma omp taskloop
+#elif defined USE_OMP_TASKS_FOR
+#pragma omp parallel
+#pragma omp for
+#else
+#pragma omp parallel for
+#endif
+            for (GraphElem i = 0; i < nv_; i++)
+            {
+#ifdef USE_OMP_TASKS_FOR
+                #pragma omp task
+		    {
+#endif
+                GraphWeight wmax = -1.0;
+                for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
+                {
+                    Edge const& edge = edge_list_[e];
+                    if (wmax < edge.weight_)
+                        wmax = edge.weight_;
+                }
+                vertex_degree_[i] = wmax;
+#ifdef USE_OMP_TASKS_FOR
+		    }
+#endif
+            }
+#ifdef LLNL_CALIPER_ENABLE
+	    CALI_MARK_END("parallel");
+	    CALI_MARK_END("nbrmax");
+#endif
+        }
+
         
 	// print statistics about edge distribution
         void print_stats()

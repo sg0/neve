@@ -116,6 +116,7 @@ int main(int argc, char **argv)
 
     // nbrscan: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
     // nbrsum : 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
+    // nbrmax : 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + nv*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
     const GraphElem nv = g->get_nv();
     const GraphElem ne = g->get_ne();
 #ifdef EDGE_AS_VERTEX_PAIR
@@ -123,10 +124,14 @@ int main(int argc, char **argv)
         + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight)); 
     const std::size_t count_nbrsum = 2*nv*sizeof(GraphElem) + 3*ne*sizeof(GraphWeight) 
         + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight));
+    const std::size_t count_nbrmax = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) + nv*sizeof(GraphWeight)
+        + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight)); 
 #else
     const std::size_t count_nbrscan = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) 
         + 2*ne*(sizeof(GraphElem) + sizeof(GraphWeight)); 
     const std::size_t count_nbrsum = 2*nv*sizeof(GraphElem) + 3*ne*sizeof(GraphWeight) 
+        + 2*ne*(sizeof(GraphElem) + sizeof(GraphWeight));
+    const std::size_t count_nbrmax = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) + nv*sizeof(GraphWeight) 
         + 2*ne*(sizeof(GraphElem) + sizeof(GraphWeight));
 #endif
 
@@ -138,6 +143,10 @@ int main(int argc, char **argv)
         ( (double) (count_nbrsum) / 1024.0),
         ( (double) (count_nbrsum) / 1024.0/1024.0),
         ( (double) (count_nbrsum) / 1024.0/1024.0/1024.0));
+    std::printf("Total memory required (Neighbor Max ) = %.1f KiB = %.1f MiB = %.1f GiB.\n",
+        ( (double) (count_nbrmax) / 1024.0),
+        ( (double) (count_nbrmax) / 1024.0/1024.0),
+        ( (double) (count_nbrmax) / 1024.0/1024.0/1024.0));
 
 #ifdef LLNL_CALIPER_ENABLE
 #else 
@@ -169,9 +178,10 @@ int main(int argc, char **argv)
 #ifdef LLNL_CALIPER_ENABLE
         g->nbrscan();
         g->nbrsum();
+        g->nbrmax();
 #else
-    double times[2][NTIMES]; 
-    double avgtime[2] = {0}, maxtime[2] = {0}, mintime[2] = {FLT_MAX,FLT_MAX};
+    double times[3][NTIMES]; 
+    double avgtime[3] = {0}, maxtime[3] = {0}, mintime[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
 
     for (int k = 0; k < NTIMES; k++)
     {
@@ -181,11 +191,14 @@ int main(int argc, char **argv)
         times[1][k] = omp_get_wtime();
         g->nbrsum();
         times[1][k] = omp_get_wtime() - times[1][k];
+        times[2][k] = omp_get_wtime();
+        g->nbrmax();
+        times[2][k] = omp_get_wtime() - times[2][k];
     }
 
     for (int k = 1; k < NTIMES; k++) // note -- skip first iteration
     {
-        for (int j = 0; j < 2; j++)
+        for (int j = 0; j < 3; j++)
         {
             avgtime[j] = avgtime[j] + times[j][k];
             mintime[j] = std::min(mintime[j], times[j][k]);
@@ -193,11 +206,11 @@ int main(int argc, char **argv)
         }
     }
 
-    std::string label[2] = {"Neighbor Copy:    ", "Neighbor Add :    "};
-    double bytes[2] = { (double)count_nbrscan, (double)count_nbrsum };
+    std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
+    double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
 
     printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
-    for (int j = 0; j < 2; j++) 
+    for (int j = 0; j < 3; j++) 
     {
         avgtime[j] = avgtime[j]/(double)(NTIMES-1);
         std::printf("%s%12.1f  %12.6f  %11.6f  %11.6f\n", label[j].c_str(),
