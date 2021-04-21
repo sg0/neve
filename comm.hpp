@@ -383,7 +383,41 @@ class Comm
             std::memset(sbuf_, 'a', out_nghosts_*size); 
             std::memset(rbuf_, 'b', in_nghosts_*size); 
         }
-        
+
+        // work functions
+        void sumdegree()
+        {
+            #pragma omp parallel for 
+            for (GraphElem i = 0; i < lnv_; i++)
+            {
+                GraphElem e0, e1;
+                g_->edge_range(i, e0, e1);
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    Edge const& edge = g_->get_edge(e);
+                    g_->degree_[i] += edge.weight_;
+                }
+            }
+        }
+         
+        void maxdegree()
+        {
+            #pragma omp parallel for 
+            for (GraphElem i = 0; i < lnv_; i++)
+            {
+                GraphElem e0, e1;
+                GraphWeight maxdeg = -1.0;
+                g_->edge_range(i, e0, e1);
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    Edge const& edge = g_->get_edge(e);
+                    if (maxdeg < edge.weight_)
+                        maxdeg = edge.weight_;
+                }
+                g_->degree_[i] = maxdeg;
+            }
+        }       
+
         // kernel for bandwidth 
         // (extra s/w overhead for determining 
         // owner and accessing CSR)
@@ -477,7 +511,45 @@ class Comm
             MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
             MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
         }
-       
+         
+        // kernel for latency using MPI Isend/Irecv (invokes sumdegree work kernel)
+        inline void comm_kernel_lt_worksum(GraphElem const& size)
+	{
+	    for (int p = 0; p < indegree_; p++)
+	    {
+		MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
+	    }
+
+            sumdegree();
+	    
+            for (int p = 0; p < outdegree_; p++)
+	    {
+		MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
+	    }
+
+            MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+        }      
+        
+        // kernel for latency using MPI Isend/Irecv (invokes maxdegree work kernel)
+        inline void comm_kernel_lt_workmax(GraphElem const& size)
+	{
+	    for (int p = 0; p < indegree_; p++)
+	    {
+		MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
+	    }
+
+            maxdegree();
+	    
+            for (int p = 0; p < outdegree_; p++)
+	    {
+		MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
+	    }
+
+            MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+        }
+
 #if defined(TEST_LT_MPI_PROC_NULL) 
 	// same as above, but replaces target with MPI_PROC_NULL to 
         // measure software overhead (invokes usleep)
@@ -962,7 +1034,203 @@ class Comm
             }
             plat.clear();
         } 
- 
+
+        // Latency test using MPI Isend/Irecv, including work sum
+        void p2p_lt_worksum()
+        {
+            double t, t_start, t_end, sum_t = 0.0;
+            int loop = lt_loop_count_, skip = lt_skip_count_;
+            
+            std::vector<double> plat(size_);
+            int n99 = (int)std::ceil(0.99*size_);
+
+            // total communicating pairs
+            int sum_npairs = outdegree_ + indegree_;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
+            sum_npairs /= 2;
+
+            if(rank_ == 0) 
+            {
+                std::cout << "---------------------------------" << std::endl;
+                std::cout << "-----Latency test (w worksum)----" << std::endl;
+                std::cout << "---------------------------------" << std::endl;
+                std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
+                    << std::setw(16) << "Max(us)" 
+                    << std::setw(16) << "99%(us)" 
+                    << std::setw(16) << "Variance" 
+                    << std::setw(15) << "STDDEV" 
+                    << std::setw(16) << "95% CI" 
+                    << std::endl;
+            }
+
+	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
+            {       
+                touch_buffers(size);
+                MPI_Barrier(comm_);
+
+                if (size > large_msg_size_) 
+                {
+                    loop = lt_loop_count_large_;
+                    skip = lt_skip_count_large_;
+		}
+                
+#if defined(SCOREP_USER_ENABLE)
+	        SCOREP_RECORDING_ON();
+		SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_Loop", SCOREP_USER_REGION_TYPE_COMMON);
+		if (rank_ == 0)
+			SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_WallTime_MainLoop", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
+                // time communication kernel
+                for (int l = 0; l < loop + skip; l++) 
+                {           
+                    if (l == skip)
+                    {
+                        t_start = MPI_Wtime();
+                        MPI_Barrier(comm_);
+                    }
+                    
+                    comm_kernel_lt_worksum(size);
+                }
+
+#if defined(SCOREP_USER_ENABLE)
+		  if (rank_ == 0)
+			  SCOREP_USER_REGION_BY_NAME_END("TRACER_WallTime_MainLoop");
+		  
+		  SCOREP_USER_REGION_BY_NAME_END("TRACER_Loop");
+		  SCOREP_RECORDING_OFF();
+#endif
+                t_end = MPI_Wtime();
+                t = (t_end - t_start) * 1.0e6 / (double)loop; 
+                double t_sq = t*t;
+                double sum_tsq = 0;
+                
+                // execution time stats
+                MPI_Allreduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, comm_);
+                MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
+
+		double avg_t = sum_t / (double) sum_npairs;
+		double avg_st = sum_t / (double) size_; // no. of observations
+                double avg_tsq = sum_tsq / (double) size_;
+                double var = avg_tsq - (avg_st*avg_st);
+                double stddev  = sqrt(var);
+                
+                double lmax = 0.0;
+                MPI_Reduce(&t, &lmax, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
+                MPI_Gather(&t, 1, MPI_DOUBLE, plat.data(), 1, MPI_DOUBLE, 0, comm_);
+                
+                if (rank_ == 0) 
+                {
+                    std::sort(plat.begin(), plat.end());
+                    std::cout << std::setw(10) << size << std::setw(17) << avg_t
+                        << std::setw(16) << lmax/2.0
+                        << std::setw(16) << plat[n99-1]/2.0
+                        << std::setw(16) << var
+                        << std::setw(16) << stddev 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * sum_npairs) 
+                        << std::endl;
+                }
+            }
+            plat.clear();
+        }
+        
+        // Latency test using MPI Isend/Irecv, including work max
+        void p2p_lt_workmax()
+        {
+            double t, t_start, t_end, sum_t = 0.0;
+            int loop = lt_loop_count_, skip = lt_skip_count_;
+            
+            std::vector<double> plat(size_);
+            int n99 = (int)std::ceil(0.99*size_);
+
+            // total communicating pairs
+            int sum_npairs = outdegree_ + indegree_;
+            MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
+            sum_npairs /= 2;
+
+            if(rank_ == 0) 
+            {
+                std::cout << "---------------------------------" << std::endl;
+                std::cout << "-----Latency test (w workmax)----" << std::endl;
+                std::cout << "---------------------------------" << std::endl;
+                std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
+                    << std::setw(16) << "Max(us)" 
+                    << std::setw(16) << "99%(us)" 
+                    << std::setw(16) << "Variance" 
+                    << std::setw(15) << "STDDEV" 
+                    << std::setw(16) << "95% CI" 
+                    << std::endl;
+            }
+
+	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
+            {       
+                touch_buffers(size);
+                MPI_Barrier(comm_);
+
+                if (size > large_msg_size_) 
+                {
+                    loop = lt_loop_count_large_;
+                    skip = lt_skip_count_large_;
+		}
+                
+#if defined(SCOREP_USER_ENABLE)
+	        SCOREP_RECORDING_ON();
+		SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_Loop", SCOREP_USER_REGION_TYPE_COMMON);
+		if (rank_ == 0)
+			SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_WallTime_MainLoop", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
+                // time communication kernel
+                for (int l = 0; l < loop + skip; l++) 
+                {           
+                    if (l == skip)
+                    {
+                        t_start = MPI_Wtime();
+                        MPI_Barrier(comm_);
+                    }
+                    
+                    comm_kernel_lt_worksum(size);
+                }
+
+#if defined(SCOREP_USER_ENABLE)
+		  if (rank_ == 0)
+			  SCOREP_USER_REGION_BY_NAME_END("TRACER_WallTime_MainLoop");
+		  
+		  SCOREP_USER_REGION_BY_NAME_END("TRACER_Loop");
+		  SCOREP_RECORDING_OFF();
+#endif
+                t_end = MPI_Wtime();
+                t = (t_end - t_start) * 1.0e6 / (double)loop; 
+                double t_sq = t*t;
+                double sum_tsq = 0;
+                
+                // execution time stats
+                MPI_Allreduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, comm_);
+                MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
+
+		double avg_t = sum_t / (double) sum_npairs;
+		double avg_st = sum_t / (double) size_; // no. of observations
+                double avg_tsq = sum_tsq / (double) size_;
+                double var = avg_tsq - (avg_st*avg_st);
+                double stddev  = sqrt(var);
+                
+                double lmax = 0.0;
+                MPI_Reduce(&t, &lmax, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
+                MPI_Gather(&t, 1, MPI_DOUBLE, plat.data(), 1, MPI_DOUBLE, 0, comm_);
+                
+                if (rank_ == 0) 
+                {
+                    std::sort(plat.begin(), plat.end());
+                    std::cout << std::setw(10) << size << std::setw(17) << avg_t
+                        << std::setw(16) << lmax/2.0
+                        << std::setw(16) << plat[n99-1]/2.0
+                        << std::setw(16) << var
+                        << std::setw(16) << stddev 
+                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * sum_npairs) 
+                        << std::endl;
+                }
+            }
+            plat.clear();
+        }
+
 #ifndef SSTMAC
         // Latency test using all-to-all among graph neighbors 
         void nbr_ala_lt()

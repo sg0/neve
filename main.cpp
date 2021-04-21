@@ -68,9 +68,11 @@ static bool hardSkip = false;
 static bool randomNumberLCG = false;
 static bool fallAsleep = false;
 
-static int lttOption = 0;
+static int lttOption = 0, performWork = 0;
 static bool performBWTest = false;
 static bool performLTTest = false;
+static bool performWorkMax = false;
+static bool performWorkSum = false;
 static bool performLTTestNbrAlltoAll = false;
 static bool performLTTestNbrAllGather = false;
 
@@ -210,6 +212,16 @@ int main(int argc, char **argv)
                         std::cout << "Invoking (u)sleep for an epoch equal to #locally-owned-vertices" << std::endl;
                     c.p2p_lt_usleep();
                 }
+                else if (performWorkSum) {
+                    if (me == 0)
+                        std::cout << "Invoking work performing degree sum for #locally-owned-vertices" << std::endl;
+                    c.p2p_lt_worksum();
+                }
+                else if (performWorkMax) {
+                    if (me == 0)
+                        std::cout << "Invoking work performing degree max for #locally-owned-vertices" << std::endl;
+                    c.p2p_lt_workmax();
+                }
                 else
                     c.p2p_lt();
             }
@@ -287,7 +299,7 @@ void parseCommandLine(int argc, char** const argv)
   int ret;
   optind = 1;
 
-  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:u")) != -1) {
+  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:ud:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -332,6 +344,12 @@ void parseCommandLine(int argc, char** const argv)
       else
           performLTTest = true;
       break;
+    case 'd':
+      performWork = atoi(optarg);
+      if (performWork > 0)
+          performWorkSum = true;
+      else
+          performWorkMax = true;
     case 'h':
       hardSkip = true;
       break;
@@ -384,6 +402,11 @@ void parseCommandLine(int argc, char** const argv)
   if (me == 0 && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather) && hardSkip)
   {
       std::cout << "The hard skip option to disable warmup and extra communication loops only affects the bandwidth test." << std::endl;
+  }
+
+  if (me == 0 && (!performLTTest) && (performWorkSum || performWorkMax))
+  {
+      std::cout << "Passing -d <> has no effect unless -t <> is passed as well. In other words, work-option is enabled only for latency tests." << std::endl;
   }
   
   if (me == 0 && chooseSingleNbr && (performLTTestNbrAlltoAll || performLTTestNbrAllGather))
