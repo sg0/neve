@@ -817,7 +817,8 @@ class Graph
             MPI_Comm_size(comm_, &size_);
             MPI_Comm_rank(comm_, &rank_);
 
-            degree_.resize(lnv_, 0);
+            degree_ = new GraphWeight[lnv_];
+            std::memset(degree_, 0, lnv_*sizeof(GraphWeight));
             edge_indices_.resize(lnv_+1, 0);
             edge_list_.resize(lne_); // this is usually populated later
 
@@ -830,7 +831,7 @@ class Graph
 
         ~Graph() 
         {
-            degree_.clear();
+            delete []degree_;
             edge_list_.clear();
             edge_indices_.clear();
             parts_.clear();
@@ -1048,7 +1049,7 @@ class Graph
         // public variables
         std::vector<GraphElem> edge_indices_;
         std::vector<Edge> edge_list_;
-        std::vector<GraphWeight> degree_;
+        GraphWeight* degree_;
     private:
         GraphElem lnv_, lne_, nv_, ne_;
         std::vector<GraphElem> parts_;       

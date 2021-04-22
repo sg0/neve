@@ -382,7 +382,7 @@ class Comm
         { 
             std::memset(sbuf_, 'a', out_nghosts_*size); 
             std::memset(rbuf_, 'b', in_nghosts_*size);
-            std::memset(g_->degree_.data(), 0, lnv_*sizeof(GraphWeight));
+            std::memset(g_->degree_, 0, lnv_*sizeof(GraphWeight));
         }
 
         // work functions
