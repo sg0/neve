@@ -381,7 +381,8 @@ class Comm
         void touch_buffers(GraphElem const& size)
         { 
             std::memset(sbuf_, 'a', out_nghosts_*size); 
-            std::memset(rbuf_, 'b', in_nghosts_*size); 
+            std::memset(rbuf_, 'b', in_nghosts_*size);
+            g_->degree_.clear();
         }
 
         // work functions
