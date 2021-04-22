@@ -350,6 +350,7 @@ void parseCommandLine(int argc, char** const argv)
           performWorkSum = true;
       else
           performWorkMax = true;
+      break;
     case 'h':
       hardSkip = true;
       break;
