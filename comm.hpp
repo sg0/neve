@@ -382,13 +382,15 @@ class Comm
         { 
             std::memset(sbuf_, 'a', out_nghosts_*size); 
             std::memset(rbuf_, 'b', in_nghosts_*size);
-            g_->degree_.clear();
+            std::memset(g_->degree_.data(), 0, lnv_*sizeof(GraphWeight));
         }
 
         // work functions
         void sumdegree()
         {
+#ifdef USE_OPENMP
             #pragma omp parallel for 
+#endif
             for (GraphElem i = 0; i < lnv_; i++)
             {
                 GraphElem e0, e1;
@@ -403,7 +405,9 @@ class Comm
          
         void maxdegree()
         {
+#ifdef USE_OPENMP
             #pragma omp parallel for 
+#endif
             for (GraphElem i = 0; i < lnv_; i++)
             {
                 GraphElem e0, e1;
