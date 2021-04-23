@@ -92,6 +92,7 @@ int main(int argc, char **argv)
     {   
         BinaryEdgeList rm;
         g = rm.read(inputFileName);
+        std::cout << "Input file: " << inputFileName << std::endl;
     }
 
 #if defined(PRINT_GRAPH_EDGES)        

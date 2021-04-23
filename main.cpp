@@ -118,13 +118,21 @@ int main(int argc, char **argv)
             if (me == 0)
             {
                 std::cout << std::endl;
-                std::cout << "Trying to balance the edge distribution while reading: " << std::endl;
+                std::cout << "Trying to balance the edge distribution (#edges/p) while reading: " << std::endl;
                 std::cout << inputFileName << std::endl;
             }
             g = rm.read_balanced(me, nprocs, ranksPerNode, inputFileName);
         }
         else
+        {
+            if (me == 0)
+            {
+                std::cout << std::endl;
+                std::cout << "Standard edge distribution (#vertices/p) while reading: " << std::endl;
+                std::cout << inputFileName << std::endl;
+            }
             g = rm.read(me, nprocs, ranksPerNode, inputFileName);
+        }
 #else
 #warning "SSTMAC is defined: Trying to load external graph binaries will FAIL."
 #endif
