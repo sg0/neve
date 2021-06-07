@@ -168,6 +168,7 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
                       of ghosts, but maintaining the overall structure of the original graph. 
                       Hence, this option can help 'shrink' a graph. Only valid for b/w test, because
 		      latency test will just perform message transfers between process neighborhoods.
+15. -o <filename>   : Generates comma-separated MPI rank order.
 
 [*]Note: Unless -w or -t <...> is passed, the code will just load the graph and create the graph data 
 structure. This is deliberate, in case we want to measure the overhead of loading a graph and 
