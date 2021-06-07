@@ -1045,6 +1045,100 @@ class Graph
                 std::cout << "-------------------------------------------------------" << std::endl;
             }
         }
+         
+        void rank_order(std::string outfile) const
+        {
+            std::vector<GraphElem> nbr_pes;
+
+            for (GraphElem v = 0; v < lnv_; v++)
+            {
+                GraphElem e0, e1;
+                this->edge_range(v, e0, e1);
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    Edge const& edge = this->get_edge(e);
+                    const int owner = this->get_owner(edge.tail_); 
+                    if (owner != rank_)
+                    {
+                        if (std::find(nbr_pes.begin(), nbr_pes.end(), owner) 
+                                == nbr_pes.end())
+                        {
+                            nbr_pes.push_back(owner);
+                        }
+                    }
+                }
+            }
+
+            GraphElem nbr_pes_size = nbr_pes.size(), snbr_pes_size = 0;
+            MPI_Reduce(&nbr_pes_size, &snbr_pes_size, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+            
+            std::vector<GraphElem> pe_list, pe_map, pe_list_nodup;
+            std::vector<int> rcounts, rdispls;
+ 
+            if (rank_ == 0)
+            {
+                rcounts.resize(size_, 0);
+                rdispls.resize(size_, 0);
+            }
+
+            MPI_Gather((int*)&nbr_pes_size, 1, MPI_INT, rcounts.data(), 1, MPI_INT, 0, comm_);
+
+            if (rank_ == 0)
+            {
+                pe_list.resize(snbr_pes_size, 0);
+                pe_map.resize(size_, 0);
+                
+                int idx = 0;
+                for (int i = 0; i < size_; i++)
+                {
+                    rdispls[i] = idx;
+                    idx += rcounts[i];
+                }
+            }
+
+            MPI_Barrier(comm_);
+
+            MPI_Gatherv(nbr_pes.data(), nbr_pes_size, MPI_GRAPH_TYPE, 
+                    pe_list.data(), rcounts.data(), rdispls.data(), 
+                    MPI_GRAPH_TYPE, 0, comm_);
+
+            if (rank_ == 0)
+            {
+                for (GraphElem x = 0; x < snbr_pes_size; x++)
+                {
+                    if (pe_map[pe_list[x]] == 0)
+                    {
+                        pe_map[pe_list[x]] = 1;
+                        pe_list_nodup.push_back(pe_list[x]);
+                    }
+                }
+
+                std::ofstream ofile;
+                ofile.open(outfile.c_str());
+
+                for (GraphElem p = 0; p < size_; p++)
+                {
+                    if (p == (size_-1))
+                        ofile << pe_list_nodup[p];
+                    else
+                        ofile << pe_list_nodup[p] << ",";
+                }
+
+                ofile.close();
+
+                std::cout << "Rank order file: " << outfile << std::endl;
+                std::cout << "-------------------------------------------------------" << std::endl;
+            }
+            
+            MPI_Barrier(comm_);
+
+            pe_list.clear();
+            pe_list_nodup.clear();
+            nbr_pes.clear();
+            pe_map.clear();
+            rcounts.clear();
+            rdispls.clear();
+        }
         
         // public variables
         std::vector<GraphElem> edge_indices_;

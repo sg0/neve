@@ -75,6 +75,8 @@ static bool performWorkMax = false;
 static bool performWorkSum = false;
 static bool performLTTestNbrAlltoAll = false;
 static bool performLTTestNbrAllGather = false;
+static std::string rankOrderFileName; 
+static bool createRankOrder = false;
 
 static bool chooseSingleNbr = false;
 static int processNbr = 0;
@@ -143,6 +145,9 @@ int main(int argc, char **argv)
 #endif
     g->print_dist_stats();
     assert(g != nullptr);
+
+    if (createRankOrder)
+        g->rank_order(rankOrderFileName);
 
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -307,7 +312,7 @@ void parseCommandLine(int argc, char** const argv)
   int ret;
   optind = 1;
 
-  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:ud:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:ud:o:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -372,6 +377,10 @@ void parseCommandLine(int argc, char** const argv)
       break;
     case 'u':
       fallAsleep = true;
+      break;
+    case 'o':
+      rankOrderFileName.assign(optarg);
+      createRankOrder = true;
       break;
     default:
       assert(0 && "Should not reach here!!");
@@ -441,6 +450,12 @@ void parseCommandLine(int argc, char** const argv)
       MPI_Abort(MPI_COMM_WORLD, -99);
   }
    
+  if (me == 0 && !generateGraph && createRankOrder && rankOrderFileName.empty()) 
+  {
+      std::cerr << "Must specify a file name with the option -o." << std::endl;
+      MPI_Abort(MPI_COMM_WORLD, -99);
+  }  
+  
   if (me == 0 && !generateGraph && randomNumberLCG) 
   {
       std::cerr << "Must specify -n for graph generation using LCG." << std::endl;
