@@ -166,139 +166,142 @@ int main(int argc, char **argv)
             std::cout << "Time to generate distributed graph of " 
                 << nvRGG << " vertices (in s): " << tdt << std::endl;
     }
-
-    // Comm object can be instantiated
-    // with iteration ranges and other 
-    // info, see class Comm in comm.hpp
-    if (maxSizeExchange == 0)
-        maxSizeExchange = MAX_SIZE;
-    if (minSizeExchange == 0)
-        minSizeExchange = MIN_SIZE;
     
-    Comm c(g, minSizeExchange, maxSizeExchange, graphShrinkPercent);
-
-    MPI_Barrier(MPI_COMM_WORLD);
-    
-    t0 = MPI_Wtime();
-   
-    // bandwidth test
-    if (performBWTest) 
+    if (performBWTest || performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather)
     {
-        if (chooseSingleNbr)
-        {
-            if (me == 0)
-            {
-                std::cout << "Choosing the neighborhood of process #" << processNbr 
-                    << " for bandwidth test." << std::endl;
-            }
-            if (maxNumGhosts > 0)
-                c.p2p_bw_snbr(processNbr, maxNumGhosts);
-            else
-                c.p2p_bw_snbr(processNbr);
-        }
-        else
-        {
-            if (hardSkip)
-                c.p2p_bw_hardskip();
-            else
-                c.p2p_bw();
-        }
-    }
+        // Comm object can be instantiated
+        // with iteration ranges and other 
+        // info, see class Comm in comm.hpp
+        if (maxSizeExchange == 0)
+            maxSizeExchange = MAX_SIZE;
+        if (minSizeExchange == 0)
+            minSizeExchange = MIN_SIZE;
 
-    // latency tests
-    if (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather)
-    {
-        if (performLTTest) 
+        Comm c(g, minSizeExchange, maxSizeExchange, graphShrinkPercent);
+
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        t0 = MPI_Wtime();
+
+        // bandwidth test
+        if (performBWTest) 
         {
             if (chooseSingleNbr)
             {
                 if (me == 0)
                 {
                     std::cout << "Choosing the neighborhood of process #" << processNbr 
-                        << " for latency test." << std::endl;
+                        << " for bandwidth test." << std::endl;
                 }
-                c.p2p_lt_snbr(processNbr);
+                if (maxNumGhosts > 0)
+                    c.p2p_bw_snbr(processNbr, maxNumGhosts);
+                else
+                    c.p2p_bw_snbr(processNbr);
             }
-            else {
-                if (fallAsleep) {
+            else
+            {
+                if (hardSkip)
+                    c.p2p_bw_hardskip();
+                else
+                    c.p2p_bw();
+            }
+        }
+
+        // latency tests
+        if (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather)
+        {
+            if (performLTTest) 
+            {
+                if (chooseSingleNbr)
+                {
                     if (me == 0)
-                        std::cout << "Invoking (u)sleep for an epoch equal to #locally-owned-vertices" << std::endl;
-                    c.p2p_lt_usleep();
+                    {
+                        std::cout << "Choosing the neighborhood of process #" << processNbr 
+                            << " for latency test." << std::endl;
+                    }
+                    c.p2p_lt_snbr(processNbr);
                 }
-                else if (performWorkSum) {
-                    if (me == 0)
-                        std::cout << "Invoking work performing degree sum for #locally-owned-vertices" << std::endl;
-                    c.p2p_lt_worksum();
+                else {
+                    if (fallAsleep) {
+                        if (me == 0)
+                            std::cout << "Invoking (u)sleep for an epoch equal to #locally-owned-vertices" << std::endl;
+                        c.p2p_lt_usleep();
+                    }
+                    else if (performWorkSum) {
+                        if (me == 0)
+                            std::cout << "Invoking work performing degree sum for #locally-owned-vertices" << std::endl;
+                        c.p2p_lt_worksum();
+                    }
+                    else if (performWorkMax) {
+                        if (me == 0)
+                            std::cout << "Invoking work performing degree max for #locally-owned-vertices" << std::endl;
+                        c.p2p_lt_workmax();
+                    }
+                    else
+                        c.p2p_lt();
                 }
-                else if (performWorkMax) {
+            }
+
+            if (performLTTestNbrAlltoAll) 
+            {
+                if (chooseSingleNbr)
+                {
                     if (me == 0)
-                        std::cout << "Invoking work performing degree max for #locally-owned-vertices" << std::endl;
-                    c.p2p_lt_workmax();
+                    {
+                        std::cout << "Choosing the neighborhood of process #" << processNbr 
+                            << " for latency test (using MPI_Isend/Irecv)." << std::endl;
+                    }
+                    c.p2p_lt_snbr(processNbr);
                 }
                 else
-                    c.p2p_lt();
-            }
-        }
-
-        if (performLTTestNbrAlltoAll) 
-        {
-            if (chooseSingleNbr)
-            {
-                if (me == 0)
                 {
-                    std::cout << "Choosing the neighborhood of process #" << processNbr 
-                        << " for latency test (using MPI_Isend/Irecv)." << std::endl;
+#ifndef SSTMAC
+                    c.nbr_ala_lt();
+#else
+#warning "SSTMAC is defined: MPI3 neighborhood collectives are turned OFF."
+#endif
                 }
-                c.p2p_lt_snbr(processNbr);
             }
-            else
-            {
-                #ifndef SSTMAC
-                c.nbr_ala_lt();
-                #else
-                #warning "SSTMAC is defined: MPI3 neighborhood collectives are turned OFF."
-                #endif
-            }
-        }
 
-        if (performLTTestNbrAllGather) 
-        {
-            if (chooseSingleNbr)
+            if (performLTTestNbrAllGather) 
             {
-                if (me == 0)
+                if (chooseSingleNbr)
                 {
-                    std::cout << "Choosing the neighborhood of process #" << processNbr 
-                        << " for latency test (using MPI_Isend/Irecv)." << std::endl;
+                    if (me == 0)
+                    {
+                        std::cout << "Choosing the neighborhood of process #" << processNbr 
+                            << " for latency test (using MPI_Isend/Irecv)." << std::endl;
+                    }
+                    c.p2p_lt_snbr(processNbr);
                 }
-                c.p2p_lt_snbr(processNbr);
-            }
-            else
-            {
-                #ifndef SSTMAC
-                c.nbr_aga_lt();
-                #else
-                #warning "SSTMAC is defined: MPI3 neighborhood collectives are turned OFF."
-                #endif
+                else
+                {
+#ifndef SSTMAC
+                    c.nbr_aga_lt();
+#else
+#warning "SSTMAC is defined: MPI3 neighborhood collectives are turned OFF."
+#endif
+                }
             }
         }
-    }
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    t1 = MPI_Wtime();
-    double p_tot = t1 - t0, t_tot = 0.0;
-    
-    MPI_Reduce(&p_tot, &t_tot, 1, MPI_DOUBLE, 
-            MPI_SUM, 0, MPI_COMM_WORLD);
-    if (me == 0) 
-    {
-        std::cout << "Average execution time (in s) for running the test on " << nprocs << " processes: " 
-            << (double)(t_tot/(double)nprocs) << std::endl;
-        #ifndef SSTMAC
-        std::cout << "Resolution of MPI_Wtime: " << MPI_Wtick() << std::endl;
-        #endif
-    }
+        MPI_Barrier(MPI_COMM_WORLD);
+        t1 = MPI_Wtime();
+        double p_tot = t1 - t0, t_tot = 0.0;
 
-    c.destroy_nbr_comm(); 
+        MPI_Reduce(&p_tot, &t_tot, 1, MPI_DOUBLE, 
+                MPI_SUM, 0, MPI_COMM_WORLD);
+        if (me == 0) 
+        {
+            std::cout << "Average execution time (in s) for running the test on " << nprocs << " processes: " 
+                << (double)(t_tot/(double)nprocs) << std::endl;
+#ifndef SSTMAC
+            std::cout << "Resolution of MPI_Wtime: " << MPI_Wtick() << std::endl;
+#endif
+        }
+
+        c.destroy_nbr_comm();
+    } // end latency/bandwidth tests
 
     MPI_Barrier(MPI_COMM_WORLD);
    

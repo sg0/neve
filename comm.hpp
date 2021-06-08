@@ -361,7 +361,7 @@ class Comm
         { 
             if (nbr_comm_ != MPI_COMM_NULL)
                 MPI_Comm_free(&nbr_comm_); 
-        };
+        }
         
         ~Comm() 
         {
