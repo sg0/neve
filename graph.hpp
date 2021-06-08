@@ -1046,7 +1046,7 @@ class Graph
             }
         }
          
-        void rank_order(std::string outfile) const
+        void rank_order(std::string const& outfile) const
         {
             std::vector<GraphElem> nbr_pes;
 
@@ -1114,9 +1114,9 @@ class Graph
                 }
 
                 std::ofstream ofile;
-                ofile.open(outfile.c_str());
+                ofile.open(outfile.c_str(), std::ofstream::out | std::ofstream::app);
 
-                for (GraphElem p = 0; p < size_; p++)
+                for (int p = 0; p < size_; p++)
                 {
                     if (p == (size_-1))
                         ofile << pe_list_nodup[p];
