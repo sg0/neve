@@ -50,6 +50,7 @@
 #include <climits>
 #include <array>
 #include <unordered_map>
+#include <cstddef>
 
 #if defined(USE_SHARED_MEMORY)
 #include <omp.h>
@@ -129,6 +130,7 @@ class Graph
         {
             edge_indices_   = new GraphElem[nv_+1];
             vertex_degree_  = new GraphWeight[nv_];
+
         }
 
         Graph(GraphElem nv, GraphElem ne): 
@@ -218,6 +220,16 @@ class Graph
         }
 
         // Memory: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
+#ifdef USE_CUDA
+        inline void nbrscan_cuda()
+        {
+            //temporarily use 4 to
+            Int nblocks =  
+            nbrscan_kernel<32><<(nv_+1)/2, 64>>>(edge_weights_dev_, edge_list_dev_, 
+                                                  edge_indices_dev_, nv_, ne_);
+            cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
+        }
+#endif
         inline void nbrscan() 
         {
 #ifdef LLNL_CALIPER_ENABLE
@@ -241,6 +253,9 @@ class Graph
 #elif defined USE_OMP_TASKS_FOR
 #pragma omp parallel
 #pragma omp for
+#elif defined USE_OMP_ACCELERATOR
+#pragma target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
+map(to:edge_list_[0:ne_] map(from:edge_weights_[0:ne_])
 #else
 #pragma omp parallel for
 #endif
@@ -266,6 +281,13 @@ class Graph
         }
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
+#ifdef USE_CUDA
+        inline void nbrsum_cuda()
+        {
+            nbrsum_kernel<<<>>>();
+                
+        }
+#endif
         inline void nbrsum() 
         {
 #ifdef LLNL_CALIPER_ENABLE
@@ -289,6 +311,9 @@ class Graph
 #elif defined USE_OMP_TASKS_FOR
 #pragma omp parallel
 #pragma omp for
+#elif defined USE_OMP_ACCELERATOR
+#pragma target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
+map(tofrom:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
 #else
 #pragma omp parallel for
 #endif
@@ -314,6 +339,12 @@ class Graph
         }
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
+#ifdef USE_CUDA
+        inline void nbrmax_cuda()
+        {
+
+        }
+#endif
         inline void nbrmax() 
         {
 #ifdef LLNL_CALIPER_ENABLE
@@ -337,6 +368,9 @@ class Graph
 #elif defined USE_OMP_TASKS_FOR
 #pragma omp parallel
 #pragma omp for
+#elif defined USE_OMP_ACCELERATOR
+#pragma target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
+map(from:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
 #else
 #pragma omp parallel for
 #endif
@@ -414,7 +448,33 @@ class Graph
         GraphElem *edge_indices_;
         Edge *edge_list_;
         GraphWeight *edge_weights_, *vertex_degree_;
+#ifdef USE_CUDA
+        void map_data_on_device()
+        {
+            cudaMalloc((void**)&edge_indices_dev_, sizeof(GraphElem)*(nv_+1));
+            cudaMalloc((void**)&edge_list_dev_, sizeof(Edge)*ne_);
+            cudaMalloc((void**)&edge_weights_dev_, sizeof(GraphWeight)*nv_);
+            cudaMalloc((void**)&vertex_degree_dev_, sizeof(GraphWeight)*nv_);
+
+            cudaMemcpy(edge_indices_dev, edge_indices_, sizeof(GraphElem)*(nv_+1), cudaMemcpyHostToDevice);
+            cudaMemcpy(edge_list_dev_, edge_list_, sizeof(Edge)*ne_, cudaMemcpyHostToDevice);
+        }
+        void map_data_release_device()
+        {
+            cudaFree(edge_indices_dev_);
+            cudaFree(edge_list_dev_);
+            cudaFree(edge_weights_dev_);
+            cudaFree(vertex_degree_dev_);
+        }
+
+        
+#endif
     private:
+#ifdef USE_CUDA
+        GraphElem *edge_indices_dev_;
+        Edge *edge_list_dev_;
+        GraphWeight *edge_weights_dev_, *vertex_degree_dev_;
+#endif
         GraphElem nv_, ne_;
 };
 

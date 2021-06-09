@@ -1,17 +1,25 @@
 CXX = g++
+ifeq ($(ENABLE_OMP_OFFLOAD),1)
+CXX = clang++
+endif
 MPICXX = mpicxx
 
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
-OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
+OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES -std=c++11
 # -DPRINT_EXTRA_NEDGES prints extra edges when -p <> is passed to 
 #  add extra edges randomly on a generated graph
 # use export ASAN_OPTIONS=verbosity=1 to check ASAN output
 SNTFLAGS = -std=c++11 -fsanitize=address -O1 -fno-omit-frame-pointer
 #CXXFLAGS = -std=c++11 -g -I. $(OPTFLAGS)
 CXXFLAGS = -g -I. $(OPTFLAGS)
-CXXFLAGS_THREADS = -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
-CXXFLAGS_MPI = 
+#CXXFLAGS_THREADS = -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
+CXXFLAGS_THREADS = -fopenmp
+ifeq ($(ENABLE_OMP_OFFLOAD),1)
+CXXFLAGS_THREADS += -fopenmp-targets=nvptx64 -Xopenmp-target=nvptx64 -march=sm_70
+endif
+CXXFLAGS_THREADS += -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-I/usr/lib/gcc/x86_64-redhat-linux/4.8.5/include/
 
+CXXFLAGS_MPI = 
 ENABLE_DUMPI_TRACE=0
 ENABLE_SCOREP_TRACE=0
 ifeq ($(ENABLE_DUMPI_TRACE),1)
