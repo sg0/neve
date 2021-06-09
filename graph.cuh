@@ -39,10 +39,10 @@ __device__ GraphWeight my_atomic_max(GraphWeight* address, GraphWeight val)
 }
 #endif
 
+template<const blocksize>
 __global__
 void nbrscan_kernel(GraphElem* __restrict__ edge_indices, Edge* 
-__restrict__ edge_list, GraphWeight* __restrict__ edge_weights, 
-GraphElem nv, GraphElem ne)
+__restrict__ edge_list, GraphWeight* __restrict__ edge_weights,GraphElem nv)
 {
     __shared__ GraphElem range[2];
     GraphElem step = gridDim.x;
@@ -59,8 +59,10 @@ GraphElem nv, GraphElem ne)
     } 
 } 
 
+template<const blocksize>
 __global__
-void nbrsum_kernel(GraphElem* __restrict__ edge_indices, Edge* __restrict__ edge_list, GraphWeight* __restrict__ vertex_degree)
+void nbrsum_kernel(GraphElem* __restrict__ edge_indices, Edge* __restrict__ edge_list, 
+GraphWeight* __restrict__ vertex_degree, GraphElem nv)
 {
     __shared__ GraphElem range[2];
     GraphElem step = gridDim.x;
@@ -77,9 +79,10 @@ void nbrsum_kernel(GraphElem* __restrict__ edge_indices, Edge* __restrict__ edge
     } 
 }
 
-
+template<const blocksize>
 __global__
-void nbrmax_kernel(GraphElem* __restrict__ edge_indices, Edge* __restrict__ edge_list, GraphWeight* __restrict__ vertex_degree)
+void nbrmax_kernel(GraphElem* __restrict__ edge_indices, Edge* __restrict__ edge_list, 
+GraphWeight* __restrict__ vertex_degree, GraphElem nv)
 {
     __shared__ GraphElem range[2];
     GraphElem step = gridDim.x;

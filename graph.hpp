@@ -223,10 +223,9 @@ class Graph
 #ifdef USE_CUDA
         inline void nbrscan_cuda()
         {
-            //temporarily use 4 to
-            Int nblocks =  
-            nbrscan_kernel<32><<(nv_+1)/2, 64>>>(edge_weights_dev_, edge_list_dev_, 
-                                                  edge_indices_dev_, nv_, ne_);
+            Int nblocks = (nv_ > 65535) ? 65535 : nv_;
+            nbrscan_kernel<64><<<nblocks, 64>>>(edge_weights_dev_, edge_list_dev_, 
+                                                  edge_indices_dev_, nv_);
             cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
 #endif
@@ -284,9 +283,12 @@ map(to:edge_list_[0:ne_] map(from:edge_weights_[0:ne_])
 #ifdef USE_CUDA
         inline void nbrsum_cuda()
         {
-            nbrsum_kernel<<<>>>();
-                
+            Int nblocks = (nv_ > 65535) ? 65535 : nv_;
+            nbrssum_kernel<64><<<nblocks, 64>>>(edge_weights_dev_, edge_list_dev_,
+                                                  edge_indices_dev_, nv_);
+            cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
+
 #endif
         inline void nbrsum() 
         {
@@ -342,7 +344,10 @@ map(tofrom:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
 #ifdef USE_CUDA
         inline void nbrmax_cuda()
         {
-
+            Int nblocks = (nv_ > 65535) ? 65535 : nv_;
+            nbrsmax_kernel<64><<<nblocks, 64>>>(edge_weights_dev_, edge_list_dev_,
+                                                  edge_indices_dev_, nv_);
+            cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
 #endif
         inline void nbrmax() 
@@ -443,7 +448,30 @@ map(from:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
             std::cout << "Standard deviation: " << pstddev << std::endl;
             std::cout << "--------------------------------------" << std::endl;
         }
-        
+#ifdef USE_CUDA
+        void check_results()
+        {
+            GraphWeight *edge_weights_buff, *vertex_degree_buff;
+            edge_weights_buff = new GraphWeight[ne_];
+            vertex_degree_buff = new GraphWeight[nv_];
+
+            cudaMemcpy(edge_weights_buff,  edge_weights_dev_,  sizeof(GraphWeight)*ne_);
+            cudaMemcpy(vertex_degree_buff, vertex_degree_dev_, sizeof(GraphWeight)*nv_);
+
+            double error1 = 0., error2 = 0.;
+            for(GraphElem i = 0; i < ne_; ++i)
+                error1 += std::pow(edge_weights_buff[i]-edge_weights_[i],2);
+
+            for(GraphElem i = 0; i < nv_; ++i)
+                error2 += std::pow(vertex_degree_buff[i]-vertex_degree__[i],2);
+
+            std::printf("Error of Copy function %lf\n", error1);
+            std::printf("Error of Sum and Max function %lf\n", error2);
+
+            delete [] edge_weights_buff;
+            delete [] vertex_degree_buff;
+        }
+#endif 
         // public variables
         GraphElem *edge_indices_;
         Edge *edge_list_;
@@ -453,8 +481,11 @@ map(from:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
         {
             cudaMalloc((void**)&edge_indices_dev_, sizeof(GraphElem)*(nv_+1));
             cudaMalloc((void**)&edge_list_dev_, sizeof(Edge)*ne_);
-            cudaMalloc((void**)&edge_weights_dev_, sizeof(GraphWeight)*nv_);
+            cudaMalloc((void**)&edge_weights_dev_, sizeof(GraphWeight)*ne_);
+            cudaMemset((void**)&edge_weights_dev_, 0, sizeof(GraphWeight)*ne_);
+
             cudaMalloc((void**)&vertex_degree_dev_, sizeof(GraphWeight)*nv_);
+            cudaMemset((void**)&vertex_degree_dev_, 0, sizeof(GraphWeight)*nv_);
 
             cudaMemcpy(edge_indices_dev, edge_indices_, sizeof(GraphElem)*(nv_+1), cudaMemcpyHostToDevice);
             cudaMemcpy(edge_list_dev_, edge_list_, sizeof(Edge)*ne_, cudaMemcpyHostToDevice);
