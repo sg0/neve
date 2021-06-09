@@ -1116,13 +1116,9 @@ class Graph
                 std::ofstream ofile;
                 ofile.open(outfile.c_str(), std::ofstream::out | std::ofstream::app);
 
-                for (int p = 0; p < size_; p++)
-                {
-                    if (p == (size_-1))
-                        ofile << pe_list_nodup[p];
-                    else
-                        ofile << pe_list_nodup[p] << ",";
-                }
+                for (int p = 0; p < size_-1; p++)
+                    ofile << pe_list_nodup[p] << ",";
+                ofile << pe_list_nodup[size_-1]; 
 
                 ofile.close();
 
