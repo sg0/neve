@@ -3,6 +3,7 @@ ifeq ($(ENABLE_OMP_OFFLOAD),1)
 CXX = clang++
 endif
 MPICXX = mpicxx
+NVCC = nvcc
 
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
 OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES -std=c++11
@@ -19,6 +20,8 @@ CXXFLAGS_THREADS += -fopenmp-targets=nvptx64 -Xopenmp-target=nvptx64 -march=sm_7
 endif
 CXXFLAGS_THREADS += -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-I/usr/lib/gcc/x86_64-redhat-linux/4.8.5/include/
 
+CUFLAGS = -O3 --std=c++11 --gpu-architecture=compute_70 --gpu-code=sm_70,compute_70 \
+-Xcompiler -fopenmp -DUSE_SHARED_MEMORY -DUSE_CUDA -DGRAPH_FT_LOAD=4 -DNTIMES=20
 CXXFLAGS_MPI = 
 ENABLE_DUMPI_TRACE=0
 ENABLE_SCOREP_TRACE=0
@@ -51,15 +54,19 @@ OBJ_MPI = main.o
 SRC_MPI = main.cpp
 TARGET_MPI = neve_mpi 
 OBJ_THREADS = main_threads.o
+OBJ_CUDA = main_cuda.o
 SRC_THREADS = main_threads.cpp
+SRC_CUDA = main_cuda.cpp
 TARGET_THREADS = neve_threads
+TARGET_CUDA = neve_cuda
 
-OBJS = $(OBJ_MPI) $(OBJ_THREADS)
-TARGETS = $(TARGET_MPI) $(TARGET_THREADS)
+OBJS = $(OBJ_MPI) $(OBJ_THREADS) ${OBJ_CUDA}
+TARGETS = $(TARGET_MPI) $(TARGET_THREADS) ${TARGET_CUDA}
 
 all: $(TARGETS)
 mpi: $(TARGET_MPI)
 threads: $(TARGET_THREADS)
+cuda: ${TARGET_CUDA}
 
 $(TARGET_MPI):  $(OBJ_MPI)
 	$(LDAPP) $(MPICXX) -o $@ $+ $(LDFLAGS) $(CXXFLAGS) 
@@ -70,10 +77,16 @@ $(OBJ_MPI): $(SRC_MPI)
 $(TARGET_THREADS):  $(OBJ_THREADS)
 	$(LDAPP) $(CXX) $(CXXFLAGS_THREADS) -o $@ $+ $(LDFLAGS) $(CXXFLAGS) 
 
+${TARGET_CUDA}:  $(OBJ_CUDA)
+	$(NVCC) $(CUFLAGS) -o $@ $^
+
 $(OBJ_THREADS): $(SRC_THREADS)
 	$(CXX) $(INCLUDE) $(CXXFLAGS) $(CXXFLAGS_THREADS) -c $< -o $@
 
-.PHONY: clean mpi threads
+${OBJ_CUDA}: ${SRC_CUDA}
+	$(NVCC) $(INCLUDE) -x cu $(CUFLAGS) -dc $< -o $@
+
+.PHONY: clean mpi threads cuda
 
 clean:
 	rm -rf *~ *.dSYM nc.vg.* $(OBJS) $(TARGETS)

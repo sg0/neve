@@ -92,7 +92,7 @@
 #ifdef USE_32_BIT_GRAPH
 using GraphElem = int32_t;
 using GraphWeight = float;
-#ifdef USE_SHARED_MEMORY
+#if defined(USE_SHARED_MEMORY)
 typedef std::aligned_storage<sizeof(GraphElem),alignof(GraphElem)>::type __GraphElem__;
 typedef std::aligned_storage<sizeof(GraphWeight),alignof(GraphWeight)>::type __GraphWeight__;
 #else
@@ -102,7 +102,7 @@ const MPI_Datatype MPI_WEIGHT_TYPE = MPI_FLOAT;
 #else
 using GraphElem = int64_t;
 using GraphWeight = double;
-#ifdef USE_SHARED_MEMORY
+#if defined(USE_SHARED_MEMORY)
 typedef std::aligned_storage<sizeof(GraphElem),alignof(GraphElem)>::type __GraphElem__;
 typedef std::aligned_storage<sizeof(GraphWeight),alignof(GraphWeight)>::type __GraphWeight__;
 #else
@@ -146,7 +146,7 @@ T genRandom(T lo, T hi)
 // Parallel Linear Congruential Generator
 // x[i] = (a*x[i-1] + b)%M
 
-#ifdef USE_SHARED_MEMORY
+#if defined(USE_SHARED_MEMORY)
 class LCG
 {
     public:

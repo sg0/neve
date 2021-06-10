@@ -23,14 +23,14 @@ __device__ GraphWeight my_atomic_max(GraphWeight* address, GraphWeight val)
 #else 
 __device__ GraphWeight my_atomic_max(GraphWeight* address, GraphWeight val)
 {
-    long long* addr_as_ull = (long long*)address;
-    long long  old = *addr_as_ull;
-    long long  assumed;
+    unsigned long long* addr_as_ull = (unsigned long long*)address;
+    unsigned long long  old = *addr_as_ull;
+    unsigned long long  assumed;
     do 
     {
         assumed = old;
         if (val > __longlong_as_double(assumed))
-            old = atomicCAS(addr_as_ull, assumed,__double_as_longlong(val);
+            old = atomicCAS(addr_as_ull, assumed,(unsigned long long)__double_as_longlong(val));
         else
             break;
     } while(assumed != old);
@@ -39,18 +39,18 @@ __device__ GraphWeight my_atomic_max(GraphWeight* address, GraphWeight val)
 }
 #endif
 
-template<const blocksize>
+template<const int blocksize>
 __global__
-void nbrscan_kernel(GraphElem* __restrict__ edge_indices, Edge* 
-__restrict__ edge_list, GraphWeight* __restrict__ edge_weights,GraphElem nv)
+void nbrscan_kernel(GraphWeight* __restrict__ edge_weights, Edge* 
+__restrict__ edge_list, GraphElem* __restrict__ edge_indices,GraphElem nv)
 {
     __shared__ GraphElem range[2];
     GraphElem step = gridDim.x;
     for(GraphElem i = 0; i < nv; i += step)
     {
         if(threadIdx.x < 2)
-            range[threadIdx.x] = edge_indices_[i+threadIdx.x];
-        __synchronize();
+            range[threadIdx.x] = edge_indices[i+threadIdx.x];
+	__syncthreads();
 
         GraphElem start = range[0];
         GraphElem end = range[1];
@@ -59,18 +59,18 @@ __restrict__ edge_list, GraphWeight* __restrict__ edge_weights,GraphElem nv)
     } 
 } 
 
-template<const blocksize>
+template<const int blocksize>
 __global__
-void nbrsum_kernel(GraphElem* __restrict__ edge_indices, Edge* __restrict__ edge_list, 
-GraphWeight* __restrict__ vertex_degree, GraphElem nv)
+void nbrsum_kernel(GraphWeight* __restrict__ vertex_degree, Edge* __restrict__ edge_list, 
+GraphElem* __restrict__ edge_indices, GraphElem nv)
 {
     __shared__ GraphElem range[2];
     GraphElem step = gridDim.x;
     for(GraphElem i = 0; i < nv; i += step)
     {
         if(threadIdx.x < 2)
-            range[threadIdx.x] = edge_indices_[i+threadIdx.x];
-        __synchronize();
+            range[threadIdx.x] = edge_indices[i+threadIdx.x];
+        __syncthreads();
 
         GraphElem start = range[0];
         GraphElem end = range[1];
@@ -79,18 +79,18 @@ GraphWeight* __restrict__ vertex_degree, GraphElem nv)
     } 
 }
 
-template<const blocksize>
+template<const int blocksize>
 __global__
-void nbrmax_kernel(GraphElem* __restrict__ edge_indices, Edge* __restrict__ edge_list, 
-GraphWeight* __restrict__ vertex_degree, GraphElem nv)
+void nbrmax_kernel(GraphWeight* __restrict__ vertex_degree, Edge* __restrict__ edge_list, 
+GraphElem* __restrict__ edge_indices, GraphElem nv)
 {
     __shared__ GraphElem range[2];
     GraphElem step = gridDim.x;
     for(GraphElem i = 0; i < nv; i += step)
     {
         if(threadIdx.x < 2)
-            range[threadIdx.x] = edge_indices_[i+threadIdx.x];
-        __synchronize();
+            range[threadIdx.x] = edge_indices[i+threadIdx.x];
+	__syncthreads();
 
         GraphElem start = range[0];
         GraphElem end = range[1];

@@ -55,10 +55,12 @@
 #if defined(USE_SHARED_MEMORY)
 #include <omp.h>
 #include <cstdlib>
+#elif defined(USE_CUDA)
+#include <omp.h>
+#include <cstdlib>
 #else
 #include <mpi.h>
 #endif
-
 #include "utils.hpp"
 
 unsigned seed;
@@ -79,6 +81,10 @@ struct Edge
     
     Edge(): tail_(-1), weight_(0.0) {}
 };
+#endif
+
+#ifdef USE_CUDA
+#include "graph.cuh"
 #endif
 
 #if defined(USE_SHARED_MEMORY) && defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
@@ -223,7 +229,7 @@ class Graph
 #ifdef USE_CUDA
         inline void nbrscan_cuda()
         {
-            Int nblocks = (nv_ > 65535) ? 65535 : nv_;
+            GraphElem nblocks = (nv_ > 65535) ? 65535 : nv_;
             nbrscan_kernel<64><<<nblocks, 64>>>(edge_weights_dev_, edge_list_dev_, 
                                                   edge_indices_dev_, nv_);
             cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
@@ -283,10 +289,10 @@ map(to:edge_list_[0:ne_] map(from:edge_weights_[0:ne_])
 #ifdef USE_CUDA
         inline void nbrsum_cuda()
         {
-            Int nblocks = (nv_ > 65535) ? 65535 : nv_;
-            nbrssum_kernel<64><<<nblocks, 64>>>(edge_weights_dev_, edge_list_dev_,
+            GraphElem nblocks = (nv_ > 65535) ? 65535 : nv_;
+            nbrsum_kernel<64><<<nblocks, 64>>>(vertex_degree_dev_, edge_list_dev_,
                                                   edge_indices_dev_, nv_);
-            cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
+            cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
 
 #endif
@@ -344,10 +350,10 @@ map(tofrom:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
 #ifdef USE_CUDA
         inline void nbrmax_cuda()
         {
-            Int nblocks = (nv_ > 65535) ? 65535 : nv_;
-            nbrsmax_kernel<64><<<nblocks, 64>>>(edge_weights_dev_, edge_list_dev_,
+            GraphElem nblocks = (nv_ > 65535) ? 65535 : nv_;
+            nbrmax_kernel<64><<<nblocks, 64>>>(vertex_degree_dev_, edge_list_dev_,
                                                   edge_indices_dev_, nv_);
-            cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
+            cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
 #endif
         inline void nbrmax() 
@@ -455,15 +461,15 @@ map(from:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
             edge_weights_buff = new GraphWeight[ne_];
             vertex_degree_buff = new GraphWeight[nv_];
 
-            cudaMemcpy(edge_weights_buff,  edge_weights_dev_,  sizeof(GraphWeight)*ne_);
-            cudaMemcpy(vertex_degree_buff, vertex_degree_dev_, sizeof(GraphWeight)*nv_);
+            cudaMemcpy(edge_weights_buff,  edge_weights_dev_,  sizeof(GraphWeight)*ne_, cudaMemcpyDeviceToHost);
+            cudaMemcpy(vertex_degree_buff, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
 
             double error1 = 0., error2 = 0.;
             for(GraphElem i = 0; i < ne_; ++i)
                 error1 += std::pow(edge_weights_buff[i]-edge_weights_[i],2);
 
             for(GraphElem i = 0; i < nv_; ++i)
-                error2 += std::pow(vertex_degree_buff[i]-vertex_degree__[i],2);
+                error2 += std::pow(vertex_degree_buff[i]-vertex_degree_[i],2);
 
             std::printf("Error of Copy function %lf\n", error1);
             std::printf("Error of Sum and Max function %lf\n", error2);
@@ -487,7 +493,7 @@ map(from:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
             cudaMalloc((void**)&vertex_degree_dev_, sizeof(GraphWeight)*nv_);
             cudaMemset((void**)&vertex_degree_dev_, 0, sizeof(GraphWeight)*nv_);
 
-            cudaMemcpy(edge_indices_dev, edge_indices_, sizeof(GraphElem)*(nv_+1), cudaMemcpyHostToDevice);
+            cudaMemcpy(edge_indices_dev_, edge_indices_, sizeof(GraphElem)*(nv_+1), cudaMemcpyHostToDevice);
             cudaMemcpy(edge_list_dev_, edge_list_, sizeof(Edge)*ne_, cudaMemcpyHostToDevice);
         }
         void map_data_release_device()

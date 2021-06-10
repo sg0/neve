@@ -51,6 +51,8 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <cuda.h>
+#include <cmath>
 
 #ifdef LLNL_CALIPER_ENABLE
 #include <caliper/cali.h>
@@ -220,7 +222,7 @@ int main(int argc, char **argv)
     }
 
     //perform the gpu part
-    double times_cuda[3][NTIMES]; 
+    float times_cuda[3][NTIMES]; 
     double avgtime_cuda[3] = {0}, maxtime_cuda[3] = {0}, mintime_cuda[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
     //for gpu timer
     cudaEvent_t start, stop;
@@ -231,19 +233,19 @@ int main(int argc, char **argv)
     {
         cudaEventRecord(start, 0);
         g->nbrscan_cuda();
-        cudaEventRecord(end, 0);
+        cudaEventRecord(stop, 0);
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&times_cuda[0][k], start, stop);
 
         cudaEventRecord(start, 0);
         g->nbrmax_cuda();
-        cudaEventRecord(end, 0);
+        cudaEventRecord(stop, 0);
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&times_cuda[1][k], start, stop);
 
         cudaEventRecord(start, 0);      
         g->nbrsum_cuda();
-        cudaEventRecord(end, 0);
+        cudaEventRecord(stop, 0);
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&times_cuda[2][k], start, stop);
     }
@@ -253,13 +255,13 @@ int main(int argc, char **argv)
         for (int j = 0; j < 3; j++)
         {
             avgtime_cuda[j] = avgtime_cuda[j] + times_cuda[j][k];
-            mintime_cuda[j] = std::min(mintime_cuda[j], times_cuda[j][k]);
-            maxtime_cuda[j] = std::max(maxtime_cuda[j], times_cuda[j][k]);
+            mintime_cuda[j] = std::min(mintime_cuda[j], (double)times_cuda[j][k]);
+            maxtime_cuda[j] = std::max(maxtime_cuda[j], (double)times_cuda[j][k]);
         }
     }
 
-    std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
-    double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
+    //std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
+    //double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
 
     printf("				GPU Profile				  \n");
     printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
