@@ -209,7 +209,7 @@ int main(int argc, char **argv)
         }
     }
 
-    std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
+    std::string label[3] = {"Neighbor Copy:    ", "Neighbor Max :    ", "Neighbor Add :    "};
     double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
 
     printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
@@ -224,6 +224,7 @@ int main(int argc, char **argv)
     //perform the gpu part
     float times_cuda[3][NTIMES]; 
     double avgtime_cuda[3] = {0}, maxtime_cuda[3] = {0}, mintime_cuda[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
+    g->map_data_on_device();
     //for gpu timer
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
@@ -242,6 +243,7 @@ int main(int argc, char **argv)
         cudaEventRecord(stop, 0);
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&times_cuda[1][k], start, stop);
+        
 
         cudaEventRecord(start, 0);      
         g->nbrsum_cuda();
@@ -269,8 +271,8 @@ int main(int argc, char **argv)
     {
         avgtime_cuda[j] = avgtime_cuda[j]/(double)(NTIMES-1);
         std::printf("%s%12.1f  %12.6f  %11.6f  %11.6f\n", label[j].c_str(),
-                1.0E-06 * bytes[j]/mintime_cuda[j], avgtime_cuda[j], mintime_cuda[j],
-                maxtime_cuda[j]);
+                1.0E-06 * bytes[j]/mintime_cuda[j]*1.0E03, avgtime_cuda[j]*1.0E-03, 
+                mintime_cuda[j]*1.0E-03,maxtime_cuda[j]*1.0E-03);
     }
     //check whether the answer is correct
     g->check_results(); 
