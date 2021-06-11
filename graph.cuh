@@ -74,12 +74,14 @@ __restrict__ edge_list, GraphElem* __restrict__ edge_indices,GraphElem nv)
     GraphElem step = gridDim.x;
     for(GraphElem i = blockIdx.x; i < nv; i += step)
     {
-        if(threadIdx.x < 2)
+       if(threadIdx.x < 2)
             range[threadIdx.x] = edge_indices[i+threadIdx.x];
 	__syncthreads();
-
+        
         GraphElem start = range[0];
         GraphElem end = range[1];
+        //GraphElem start = edge_indices[i];
+        //GraphElem end = edge_indices[i+1];
         for(GraphElem e = start+threadIdx.x; e < end; e += blocksize)
             edge_weights[e] = edge_list[e].weight_;
         __syncthreads();
@@ -93,53 +95,38 @@ __global__
 void nbrsum_kernel(GraphWeight* __restrict__ vertex_degree, Edge* __restrict__ edge_list, 
 GraphElem* __restrict__ edge_indices, GraphElem nv)
 {
-    //__shared__ GraphElem range[2];
+    __shared__ GraphElem range[2];
     volatile  __shared__ GraphWeight data[blocksize];
     GraphElem step = gridDim.x;
     for(GraphElem i = blockIdx.x; i < nv; i += step)
     {
-        /*if(threadIdx.x < 2)
+        GraphWeight w = 0.;
+        if(threadIdx.x < 2)
             range[threadIdx.x] = edge_indices[i+threadIdx.x];
         __syncthreads();
-        */
-        //GraphElem start = range[0];
-        //GraphElem end = range[1];
-        data[threadIdx.x] = 0.;
-        __syncthreads();
-        GraphElem start = edge_indices[i];
-        GraphElem end = edge_indices[i+1];
+
+        GraphElem start = range[0];
+        GraphElem end = range[1];
+
+        //GraphElem start = edge_indices[i];
+        //GraphElem end = edge_indices[i+1];
         for(GraphElem e = start+threadIdx.x; e < end; e += blocksize)
-        {
-            GraphWeight w = edge_list[e].weight_;
-            data[threadIdx.x] += w;
-        }
-         __syncthreads();
-        for (unsigned int s=blocksize/2; s>32; s>>=1) 
+            w += edge_list[e].weight_;
+        data[threadIdx.x] = w;
+        __syncthreads();
+        for (unsigned int s=blocksize/2; s>=32; s>>=1) 
         {
             if (threadIdx.x < s)
                 data[threadIdx.x] += data[threadIdx.x + s];
             __syncthreads();
         }
-        if(threadIdx.x < 32)
-            data[threadIdx.x] += data[threadIdx.x + 32];
-            __syncthreads();
-        if(threadIdx.x < 16)
-            data[threadIdx.x] += data[threadIdx.x + 16];
-            __syncthreads();
-        if(threadIdx.x < 8)
-            data[threadIdx.x] += data[threadIdx.x + 8];
-            __syncthreads();
-        if(threadIdx.x < 4)
-            data[threadIdx.x] += data[threadIdx.x + 4];
-            __syncthreads();
-        if(threadIdx.x < 2)
-            data[threadIdx.x] += data[threadIdx.x + 2];
-            __syncthreads();
-        if(threadIdx.x < 1)
-            data[threadIdx.x] += data[threadIdx.x + 1]; 
-            //__syncthreads();
+        w = data[threadIdx.x%32];
+        //__syncthreads();
+        for (int offset = 16; offset > 0; offset /= 2)
+            w += __shfl_down_sync(0xffffffff, w, offset);
+
         if(threadIdx.x == 0)
-            vertex_degree[i] += data[0];
+            vertex_degree[i] += w;
         __syncthreads();
     }
 }
@@ -149,58 +136,45 @@ __global__
 void nbrmax_kernel(GraphWeight* __restrict__ vertex_degree, Edge* __restrict__ edge_list, 
 GraphElem* __restrict__ edge_indices, GraphElem nv)
 {
-    //__shared__ GraphElem range[2];
+    __shared__ GraphElem range[2];
     volatile __shared__ GraphWeight data [blocksize];
     GraphElem step = gridDim.x;
     for(GraphElem i = blockIdx.x; i < nv; i += step)
     {
-        /*if(threadIdx.x < 2)
+        float max = 0.;
+        if(threadIdx.x < 2)
             range[threadIdx.x] = edge_indices[i+threadIdx.x];
-	__syncthreads();
-        */
-        //GraphElem start = range[0];
-        //GraphElem end = range[1];
-        data[threadIdx.x] = 0.;
         __syncthreads();
 
-        GraphElem start = edge_indices[i];
-        GraphElem end = edge_indices[i+1];
+        GraphElem start = range[0];
+        GraphElem end = range[1];
+
+        //GraphElem start = edge_indices[i];
+        //GraphElem end = edge_indices[i+1];
         for(GraphElem e = start+threadIdx.x; e < end; e += blocksize)
         {
             GraphWeight w = edge_list[e].weight_;
-            //my_atomic_max(vertex_degree+i, w);
-            if(data[threadIdx.x] < w)
-                data[threadIdx.x] = w;
+            if(max < w)
+                max = w;
         }
-        for (unsigned int s=blocksize/2; s>32; s>>=1)
+        data[threadIdx.x] = max;
+        __syncthreads();
+        for (unsigned int s=blocksize/2; s>=32; s>>=1)
         {
-            if (threadIdx.x < s)
-            {
-                if(data[threadIdx.x + s] > data[threadIdx.x])
-                    data[threadIdx.x] = data[threadIdx.x+s];
-            }
+            if (threadIdx.x < s && data[threadIdx.x+s] > data[threadIdx.x])
+                data[threadIdx.x] = data[threadIdx.x+s];
             __syncthreads();
         }
-        if(threadIdx.x < 32 && data[threadIdx.x+32] > data[threadIdx.x])
-            data[threadIdx.x] = data[threadIdx.x+32];
-        __syncthreads();
-        if(threadIdx.x < 16 && data[threadIdx.x+16] > data[threadIdx.x])
-            data[threadIdx.x] = data[threadIdx.x+16];
-        __syncthreads();
-        if(threadIdx.x < 8 && data[threadIdx.x+8] > data[threadIdx.x])
-            data[threadIdx.x] = data[threadIdx.x+8];
-        __syncthreads();
-        if(threadIdx.x < 4 && data[threadIdx.x+4] > data[threadIdx.x])
-            data[threadIdx.x] = data[threadIdx.x+4];
-        __syncthreads();
-        if(threadIdx.x < 2 && data[threadIdx.x+2] > data[threadIdx.x])
-            data[threadIdx.x] = data[threadIdx.x+2];
-        __syncthreads();
-        if(threadIdx.x < 1 && data[threadIdx.x+1] > data[threadIdx.x])    
-           data[threadIdx.x] = data[threadIdx.x+1];
+        max = data[threadIdx.x%32];
         //__syncthreads();
+        for (int offset = 16; offset > 0; offset /= 2)
+        {
+            float tmp = __shfl_down_sync(0xffffffff, max, offset);
+            max = (tmp > max) ? tmp : max;
+        }
+
         if(threadIdx.x == 0)
-            vertex_degree[i] = data[0]; 
+            vertex_degree[i] = max; 
         __syncthreads();
     } 
 }

@@ -4,6 +4,7 @@ CXX = clang++
 endif
 MPICXX = mpicxx
 NVCC = nvcc
+SM=60
 
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
 OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES -std=c++11
@@ -17,11 +18,11 @@ CXXFLAGS = -g -I. $(OPTFLAGS)
 #CXXFLAGS_THREADS = -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
 CXXFLAGS_THREADS = -fopenmp
 ifeq ($(ENABLE_OMP_OFFLOAD),1)
-CXXFLAGS_THREADS += -fopenmp-targets=nvptx64 -Xopenmp-target=nvptx64 -march=sm_70
+CXXFLAGS_THREADS += -fopenmp-targets=nvptx64 -Xopenmp-target=nvptx64 -march=sm_${SM}
 endif
 CXXFLAGS_THREADS += -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-I/usr/lib/gcc/x86_64-redhat-linux/4.8.5/include/
 
-CUFLAGS = -O3 --std=c++11 --gpu-architecture=compute_70 --gpu-code=sm_70,compute_70 \
+CUFLAGS = -O3 --std=c++11 --gpu-architecture=compute_${SM} --gpu-code=sm_${SM},compute_${SM} \
 -Xcompiler -fopenmp -DUSE_SHARED_MEMORY -DUSE_CUDA -DGRAPH_FT_LOAD=4 -DNTIMES=20
 CXXFLAGS_MPI = 
 ENABLE_DUMPI_TRACE=0

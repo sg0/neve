@@ -628,7 +628,7 @@ class BinaryEdgeList
 
                 while (transf_bytes < tot_bytes)
                 {
-                    file.read(&curr_poointer[offset], tot_bytes);
+                    file.read(&curr_pointer[offset], tot_bytes);
                     transf_bytes += chunk_bytes;
                     offset += chunk_bytes;
                     curr_pointer += chunk_bytes;
