@@ -134,26 +134,44 @@ class Graph
             nv_(nv), ne_(-1), 
             edge_list_(nullptr), edge_weights_(nullptr)
         {
+            #ifdef USE_PINNED_HOST
+            cudaMallocHost((void**)&edge_indices_, sizeof(GraphElem)*(nv_+1));
+            cudaMallocHost((void**)&vertex_degree_, sizeof(GraphWeight)*nv_);
+            #else 
             edge_indices_   = new GraphElem[nv_+1];
             vertex_degree_  = new GraphWeight[nv_];
-
+            #endif
         }
 
         Graph(GraphElem nv, GraphElem ne): 
             nv_(nv), ne_(ne) 
         {
+            #ifdef USE_PINNED_HOST
+            cudaMallocHost((void**)&edge_indices_, sizeof(GraphElem)*(nv_+1));
+            cudaMallocHost((void**)&edge_list_, sizeof(Edge)*ne_);
+            cudaMallocHost((void**)&vertex_degree_, sizeof(GraphWeight)*nv_);
+            cudaMallocHost((void**)&edge_weights_, sizeof(GraphWeight)*ne_);
+            #else
             edge_indices_   = new GraphElem[nv_+1];
             edge_list_      = new Edge[ne_];
             vertex_degree_  = new GraphWeight[nv_];
             edge_weights_   = new GraphWeight[ne_];
+            #endif
         }
 
         ~Graph() 
         {
-            delete []edge_indices_;
-            delete []edge_list_;
-            delete []edge_weights_;
-            delete []vertex_degree_;
+            #ifdef USE_PINNED_HOST
+            cudaFreeHost(edge_indices_);
+            cudaFreeHost(edge_list_);
+            cudaFreeHost(vertex_degree_);
+            cudaFreeHost(edge_weights_);
+            #else
+            delete [] edge_indices_;
+            delete [] edge_list_;
+            delete [] edge_weights_;
+            delete [] vertex_degree_;
+            #endif
         }
          
         void set_edge_index(GraphElem const vertex, GraphElem const e0)
@@ -176,10 +194,16 @@ class Graph
 
         void set_nedges(GraphElem ne) 
         { 
-            ne_ = ne; 
+            ne_ = ne;
+            #ifdef USE_PINNED_HOST
+            cudaMallocHost((void**)&edge_list_, sizeof(Edge)*ne_);
+            cudaMallocHost((void**)&edge_weights_,sizeof(GraphWeight)*ne_);
+            #else 
             edge_list_      = new Edge[ne_];
             edge_weights_   = new GraphWeight[ne_];
+            #endif
         }
+
 
         GraphElem get_nv() const { return nv_; }
         GraphElem get_ne() const { return ne_; }
@@ -259,8 +283,10 @@ class Graph
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-#pragma target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
-map(to:edge_list_[0:ne_] map(from:edge_weights_[0:ne_])
+//#pragma omp target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
+map(to:edge_list_[0:ne_]) map(from:edge_weights_[0:ne_])
+#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:edge_weights_[0:ne_])
+#pragma omp teams distribute parallel for
 #else
 #pragma omp parallel for
 #endif
@@ -321,8 +347,10 @@ map(to:edge_list_[0:ne_] map(from:edge_weights_[0:ne_])
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-#pragma target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
-map(tofrom:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
+//#pragma omp target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
+map(tofrom:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
+#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:vertex_degree_[0:nv_])
+#pragma omp teams distribute parallel for
 #else
 #pragma omp parallel for
 #endif
@@ -382,8 +410,10 @@ map(tofrom:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-#pragma target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
-map(from:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
+//#pragma omp target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
+map(from:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
+#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:vertex_degree_[0:nv_])
+#pragma omp teams distribute parallel for
 #else
 #pragma omp parallel for
 #endif
@@ -470,11 +500,7 @@ map(from:vertex_degree_[0:nv_] map(to:edge_list_[0:ne_])
             for(GraphElem i = 0; i < ne_; ++i)
                 error1 += std::pow(edge_weights_buff[i]-edge_weights_[i],2);
             for(GraphElem i = 0; i < nv_; ++i)
-            {
-                //if(i < 100)
-                //std::cout << vertex_degree_buff[i] << " " << vertex_degree_[i] << std::endl;
                 error2 += std::pow(vertex_degree_buff[i]-vertex_degree_[i],2);
-            }
             std::printf("Error of Copy function %lf\n", error1);
             std::printf("Error of Sum and Max function %lf\n", error2);
 

@@ -18,12 +18,16 @@ CXXFLAGS = -g -I. $(OPTFLAGS)
 #CXXFLAGS_THREADS = -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
 CXXFLAGS_THREADS = -fopenmp
 ifeq ($(ENABLE_OMP_OFFLOAD),1)
-CXXFLAGS_THREADS += -fopenmp-targets=nvptx64 -Xopenmp-target=nvptx64 -march=sm_${SM}
+CXXFLAGS_THREADS += -fopenmp-targets=nvptx64 -Xopenmp-target=nvptx64 -march=sm_${SM} -DUSE_OMP_ACCELERATOR
 endif
 CXXFLAGS_THREADS += -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-I/usr/lib/gcc/x86_64-redhat-linux/4.8.5/include/
 
 CUFLAGS = -O3 --std=c++11 --gpu-architecture=compute_${SM} --gpu-code=sm_${SM},compute_${SM} \
 -Xcompiler -fopenmp -DUSE_SHARED_MEMORY -DUSE_CUDA -DGRAPH_FT_LOAD=4 -DNTIMES=20
+ifeq ($(ENABLE_PINNED),1)
+CUFLAGS += -DUSE_PINNED_HOST
+endif
+
 CXXFLAGS_MPI = 
 ENABLE_DUMPI_TRACE=0
 ENABLE_SCOREP_TRACE=0
