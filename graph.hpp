@@ -285,8 +285,14 @@ class Graph
 #elif defined USE_OMP_ACCELERATOR
 //#pragma omp target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
 map(to:edge_list_[0:ne_]) map(from:edge_weights_[0:ne_])
-#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:edge_weights_[0:ne_])
-#pragma omp teams distribute parallel for
+//#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:edge_weights_[0:ne_])
+//#pragma omp teams distribute parallel for
+           Edge* edge_list_ptr = edge_list_;
+           GraphWeight* edge_weights_ptr = edge_weights_;
+           GraphElem* edge_indices_ptr = edge_indices_;
+#pragma omp target parallel for \
+map(from:edge_weights_ptr[0:ne_]) \
+map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 #else
 #pragma omp parallel for
 #endif
@@ -296,11 +302,19 @@ map(to:edge_list_[0:ne_]) map(from:edge_weights_[0:ne_])
                 #pragma omp task
 		    {
 #endif
+#if defined USE_OMP_ACCELERATOR
+                for (GraphElem e = edge_indices_ptr[i]; e < edge_indices_ptr[i+1]; e++)
+                {
+                    Edge const& edge = edge_list_ptr[e];
+                    edge_weights_ptr[e] = edge.weight_;
+                }
+#else
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
                     Edge const& edge = edge_list_[e];
                     edge_weights_[e] = edge.weight_;
                 }
+#endif
 #ifdef USE_OMP_TASKS_FOR
 		    }
 #endif
@@ -349,8 +363,14 @@ map(to:edge_list_[0:ne_]) map(from:edge_weights_[0:ne_])
 #elif defined USE_OMP_ACCELERATOR
 //#pragma omp target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
 map(tofrom:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
-#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:vertex_degree_[0:nv_])
-#pragma omp teams distribute parallel for
+//#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:vertex_degree_[0:nv_])
+//#pragma omp teams distribute parallel for
+           Edge* edge_list_ptr = edge_list_;
+           GraphWeight* vertex_degree_ptr = vertex_degree_;
+           GraphElem* edge_indices_ptr = edge_indices_;
+#pragma omp target parallel for \
+map(from:vertex_degree_ptr[0:nv_]) \
+map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 #else
 #pragma omp parallel for
 #endif
@@ -360,11 +380,19 @@ map(tofrom:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
                 #pragma omp task
 		    {
 #endif
+#if defined USE_OMP_ACCELERATOR
+                for (GraphElem e = edge_indices_ptr[i]; e < edge_indices_ptr[i+1]; e++)
+                {
+                    Edge const& edge = edge_list_ptr[e];
+                    vertex_degree_ptr[i] += edge.weight_;
+                }
+#else
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
                     Edge const& edge = edge_list_[e];
                     vertex_degree_[i] += edge.weight_;
                 }
+#endif
 #ifdef USE_OMP_TASKS_FOR
 		    }
 #endif
@@ -412,8 +440,14 @@ map(tofrom:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
 #elif defined USE_OMP_ACCELERATOR
 //#pragma omp target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
 map(from:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
-#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:vertex_degree_[0:nv_])
-#pragma omp teams distribute parallel for
+//#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:vertex_degree_[0:nv_])
+//#pragma omp teams distribute parallel for
+           Edge* edge_list_ptr = edge_list_;
+           GraphWeight* vertex_degree_ptr = vertex_degree_;
+           GraphElem* edge_indices_ptr = edge_indices_;
+#pragma omp target parallel for \
+map(from:vertex_degree_ptr[0:nv_]) \
+map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 #else
 #pragma omp parallel for
 #endif
@@ -424,6 +458,15 @@ map(from:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
 		    {
 #endif
                 GraphWeight wmax = -1.0;
+#if defined USE_OMP_ACCELERATOR
+                for (GraphElem e = edge_indices_ptr[i]; e < edge_indices_ptr[i+1]; e++)
+                {
+                    Edge const& edge = edge_list_ptr[e];
+                    if (wmax < edge.weight_)
+                        wmax = edge.weight_;
+                }
+                vertex_degree_ptr[i] = wmax;
+#else
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
                     Edge const& edge = edge_list_[e];
@@ -431,6 +474,7 @@ map(from:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
                         wmax = edge.weight_;
                 }
                 vertex_degree_[i] = wmax;
+#endif
 #ifdef USE_OMP_TASKS_FOR
 		    }
 #endif
