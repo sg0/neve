@@ -1,10 +1,11 @@
+ENABLE_OMP_OFFLOAD=1
 CXX = g++
 ifeq ($(ENABLE_OMP_OFFLOAD),1)
 CXX = clang++
 endif
 MPICXX = mpicxx
 NVCC = nvcc
-SM=60
+SM=70
 
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
 OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES -std=c++11
