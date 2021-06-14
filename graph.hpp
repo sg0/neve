@@ -65,6 +65,9 @@
 
 unsigned seed;
 
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp declare target
+#endif
 #ifdef EDGE_AS_VERTEX_PAIR
 struct Edge
 {
@@ -81,6 +84,9 @@ struct Edge
     
     Edge(): tail_(-1), weight_(0.0) {}
 };
+#endif
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp end declare target
 #endif
 
 #ifdef USE_CUDA
