@@ -256,7 +256,7 @@ class Graph
             GraphElem nblocks = (nv_ > 65535) ? 65535 : nv_;
             nbrscan_kernel<64><<<nblocks, 64>>>(edge_weights_dev_, edge_list_dev_, 
                                                   edge_indices_dev_, nv_);
-            //cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
+            cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
 #endif
         inline void nbrscan() 
@@ -318,7 +318,7 @@ map(to:edge_list_[0:ne_]) map(from:edge_weights_[0:ne_])
             GraphElem nblocks = (nv_ > 65535) ? 65535 : nv_;
             nbrsum_kernel<64><<<nblocks, 64>>>(vertex_degree_dev_, edge_list_dev_,
                                                   edge_indices_dev_, nv_);
-            //cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
+            cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
             //cudaDeviceSynchronize();
         }
 
@@ -383,7 +383,7 @@ map(tofrom:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
             nbrmax_kernel<64><<<nblocks, 64>>>(vertex_degree_dev_, edge_list_dev_,
                                                   edge_indices_dev_, nv_);
             //cudaDeviceSynchronize();
-            //cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
+            cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
 #endif
         inline void nbrmax() 
