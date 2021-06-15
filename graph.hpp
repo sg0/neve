@@ -296,7 +296,7 @@ map(to:edge_list_[0:ne_]) map(from:edge_weights_[0:ne_])
            Edge* edge_list_ptr = edge_list_;
            GraphWeight* edge_weights_ptr = edge_weights_;
            GraphElem* edge_indices_ptr = edge_indices_;
-#pragma omp target parallel for \
+#pragma omp target teams distribute parallel for \
 map(from:edge_weights_ptr[0:ne_]) \
 map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 #else
@@ -374,7 +374,7 @@ map(tofrom:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
            Edge* edge_list_ptr = edge_list_;
            GraphWeight* vertex_degree_ptr = vertex_degree_;
            GraphElem* edge_indices_ptr = edge_indices_;
-#pragma omp target parallel for \
+#pragma omp target teams distribute parallel for \
 map(from:vertex_degree_ptr[0:nv_]) \
 map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 #else
@@ -451,7 +451,7 @@ map(from:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
            Edge* edge_list_ptr = edge_list_;
            GraphWeight* vertex_degree_ptr = vertex_degree_;
            GraphElem* edge_indices_ptr = edge_indices_;
-#pragma omp target parallel for \
+#pragma omp target teams distribute parallel for \
 map(from:vertex_degree_ptr[0:nv_]) \
 map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 #else
