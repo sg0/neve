@@ -59,7 +59,16 @@
 #include <caliper/cali-manager.h>
 #endif
 
+unsigned seed;
+#include "types.hpp"
 #include "graph.hpp"
+
+#include <random>
+#ifdef USE_32_BIT_GRAPH
+typedef std::mt19937 Mt19937;
+#else
+typedef std::mt19937_64 Mt19937;
+#endif
 
 // A lot of print diagnostics is lifted from
 // the STREAM benchmark.
@@ -277,7 +286,31 @@ int main(int argc, char **argv)
     //check whether the answer is correct
     g->check_results(); 
 #endif
+    //start testing the re-order edges
+    g->map_data_release_device();
+/*
+    g->allocate(); 
+ 
+    GraphElem* index_orders = new GraphElem[ne];  
+    GraphElem* commIds = new GraphElem[nv];
+    set_random_commIds(commIds, nv);
+    randomize_weights(g->edge_weights_, ne);
+    g->nbrscan_edges();
     
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start, 0);
+    g->nbrsort_edges_by_commids(index_orders, commIds);
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    float sort_time;    
+    cudaEventElapsedTime(&sort_time, start, stop);
+    std::cout << "The Time of sorting is " << sort_time*1E-03 << " s" << std::endl;
+    g->deallocate();
+
+    delete [] index_orders;
+    delete [] commIds;*/
     return 0;
 }
 

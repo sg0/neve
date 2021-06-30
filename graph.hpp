@@ -55,35 +55,16 @@
 #if defined(USE_SHARED_MEMORY)
 #include <omp.h>
 #include <cstdlib>
-#elif defined(USE_CUDA)
-#include <omp.h>
-#include <cstdlib>
 #else
 #include <mpi.h>
 #endif
 #include "utils.hpp"
+#include <unistd.h>
 
-unsigned seed;
+//unsigned seed;
 
 #ifdef USE_OMP_ACCELERATOR
 #pragma omp declare target
-#endif
-#ifdef EDGE_AS_VERTEX_PAIR
-struct Edge
-{
-    GraphElem head_, tail_;
-    GraphWeight weight_;
-    
-    Edge(): head_(-1), tail_(-1), weight_(0.0) {}
-};
-#else
-struct Edge
-{
-    GraphElem tail_;
-    GraphWeight weight_;
-    
-    Edge(): tail_(-1), weight_(0.0) {}
-};
 #endif
 #ifdef USE_OMP_ACCELERATOR
 #pragma omp end declare target
@@ -92,7 +73,6 @@ struct Edge
 #ifdef USE_CUDA
 #include "graph.cuh"
 #endif
-
 #if defined(USE_SHARED_MEMORY) && defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
 #ifndef CACHE_LINE_SIZE_BYTES
 #define CACHE_LINE_SIZE_BYTES   256
@@ -152,32 +132,36 @@ class Graph
         Graph(GraphElem nv, GraphElem ne): 
             nv_(nv), ne_(ne) 
         {
-            #ifdef USE_PINNED_HOST
+            /*#ifdef USE_PINNED_HOST
             cudaMallocHost((void**)&edge_indices_, sizeof(GraphElem)*(nv_+1));
             cudaMallocHost((void**)&edge_list_, sizeof(Edge)*ne_);
             cudaMallocHost((void**)&vertex_degree_, sizeof(GraphWeight)*nv_);
             cudaMallocHost((void**)&edge_weights_, sizeof(GraphWeight)*ne_);
-            #else
+            cudaMallocHost((void**)&edges_, sizeof(GraphElem)*ne_);
+            #else*/
             edge_indices_   = new GraphElem[nv_+1];
             edge_list_      = new Edge[ne_];
             vertex_degree_  = new GraphWeight[nv_];
             edge_weights_   = new GraphWeight[ne_];
-            #endif
+            edges_ = new GraphElem[ne_];
+            //#endif
         }
 
         ~Graph() 
         {
-            #ifdef USE_PINNED_HOST
+            /*#ifdef USE_PINNED_HOST
             cudaFreeHost(edge_indices_);
             cudaFreeHost(edge_list_);
             cudaFreeHost(vertex_degree_);
             cudaFreeHost(edge_weights_);
-            #else
+            cudaFreeHost(edges_);
+            #else*/
             delete [] edge_indices_;
             delete [] edge_list_;
             delete [] edge_weights_;
             delete [] vertex_degree_;
-            #endif
+            delete [] edges_;
+            //#endif
         }
          
         void set_edge_index(GraphElem const vertex, GraphElem const e0)
@@ -201,13 +185,14 @@ class Graph
         void set_nedges(GraphElem ne) 
         { 
             ne_ = ne;
-            #ifdef USE_PINNED_HOST
+            /*#ifdef USE_PINNED_HOST
             cudaMallocHost((void**)&edge_list_, sizeof(Edge)*ne_);
             cudaMallocHost((void**)&edge_weights_,sizeof(GraphWeight)*ne_);
-            #else 
+            #else*/
             edge_list_      = new Edge[ne_];
             edge_weights_   = new GraphWeight[ne_];
-            #endif
+            edges_ = new GraphElem[ne_];
+            //#endif
         }
 
 
@@ -254,7 +239,147 @@ class Graph
                     "}, which will overwhelm STDOUT." << std::endl;
             }
         }
+inline void nbrscan_edges()
+{
+    GraphElem e0, e1;
+#ifdef ENABLE_PREFETCH
+#ifdef __INTEL_COMPILER
+#pragma noprefetch edge_weights_
+#pragma prefetch edge_indices_:3
+#pragma prefetch edge_list_:3
+#endif
+#endif
+#ifdef USE_OMP_DYNAMIC
+#pragma omp parallel for schedule(dynamic)
+#elif defined USE_OMP_TASKLOOP_MASTER
+#pragma omp parallel
+#pragma omp master
+#pragma omp taskloop
+#elif defined USE_OMP_TASKS_FOR
+#pragma omp parallel
+#pragma omp for
+#elif defined USE_OMP_ACCELERATOR
+    Edge* edge_list_ptr = edge_list_;
+    GraphWeight* edges_ptr = edges_;
+    GraphElem* edge_indices_ptr = edge_indices_;
+#pragma omp target parallel for \
+map(from:edge_weights_ptr[0:ne_]) \
+map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
+#else
+#pragma omp parallel for
+#endif
+    for (GraphElem i = 0; i < nv_; i++)
+    {
+#ifdef USE_OMP_TASKS_FOR
+        #pragma omp task
+        {
+#endif
+#if defined USE_OMP_ACCELERATOR
+            for (GraphElem e = edge_indices_ptr[i]; e < edge_indices_ptr[i+1]; e++)
+            {
+                Edge const& edge = edge_list_ptr[e];
+                edges_ptr[e] = edge.tail_;
+            }
+#else
+            for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
+            {
+                Edge const& edge = edge_list_[e];
+                edges_[e] = edge.tail_;
+            }
+#endif
+#ifdef USE_OMP_TASKS_FOR
+        }
+#endif
+    }
+}
+#if 0
+    inline void nbr_max_order_cuda()
+    {
+        cudaMemcpyAsync(indices_dev_, edge_indices_, sizeof(GraphElem)*(nv_+1), cudaMemcpyHostToDevice,0);
+        GraphElem* orders;
+        int nblocks = (nv_ > MAX_GRIDDIM) ? MAX_GRIDDIM : nv_; 
+        cudaMalloc((void**)&orders, sizeof(GraphElem)*nblocks);
+        nbr_max_order_reduce_kernel<64><<<nblocks, 64>>>(indices_dev_, orders, nv_);
+        nbr_max_order_kernel<64><<<1,64>>>(orders, nblocks);
+        cudaMemcpy(&max_order, orders, sizeof(GraphElem), cudaMemcpyDeviceToHost);
+        cudaFree(orders);
+    }
+#endif
+    inline void nbr_max_order()
+    {
+        max_order_ = 0;
+        for(GraphElem i = 0; i < nv_; ++i)
+        {
+            GraphElem order = edge_indices_[i+1]-edge_indices_[i];
+            if(max_order_ < order)
+                max_order_ = order;
+        } 
+    }
+#if 0  
+#ifndef NUM_STREAMS
+#define NUM_STREAMS 16
+#endif
+    inline void nbrsort_edges_by_commids(GraphElem* index_orders, GraphElem* commIds, const GraphElem& nv_per_batch)
+    {
+        cudaStream_t cuStreams[NUM_STREAMS];
+        for(int i = 0; i < NUM_STREAMS; ++i)
+            cudaStreamCreate(&cuStreams[i]);
 
+        cudaMemcpyAsync(commIds_dev_, commIds, sizeof(GraphElem)*nv_, cudaMemcpyHostToDevice, cuStreams[0]);
+        cudaMemcpyAsync(indices_dev_, edge_indices_, sizeof(GraphElem)*(nv_+1), cudaMemcpyHostToDevice, cuStreams[1]);
+
+        cudaHostRegister(index_orders, sizeof(GraphElem)*nv_per_batch*max_order, cudaHostRegisterPortable);
+        cudaHostRegister(commIds, sizeof(GraphElem)*nv_, cudaHostRegisterPortable);
+
+        thrust::device_ptr<GraphElem> edges_dev_ptr = thrust::device_pointer_cast((GraphElem*)edges_dev_);
+        thrust::device_ptr<GraphElem> index_orders_dev_ptr = thrust::device_pointer_cast((GraphElem*)weights_dev_);
+
+         GraphElem nbatches = (nv_+nv_per_batch-1)/nv_per_batch;
+         for(GraphElem  0; i < nbatches; ++i)
+         { 
+             GraphElem v0 = (i+0)*nv_per_batch;
+             GraphElem v1 = (i+1)*nv_per_batch;
+
+             if(end > nv_) 
+                 end = nv_;
+
+             GraphElem e0 = edge_indices_[v0];
+             GraphElem e1 = edge_indices_[v1];
+             GraphElem local_ne = e1-e0;
+
+             cudaMemcpyAsync(edges_dev_, edges_+e0, sizeof(GraphElem)*local_ne, cudaMemcpyHostToDevice, cuStreams[2]);
+
+             GraphElem nblocks = ((nv_+1)/2 > MAX_GRIDDIM) ? MAX_GRIDDIM : (nv_+1)/2;
+             fill_index_orders_kernel<32,64><<<nblocks, 64, 0, cuStreams[1]>>>((GraphElem*)weights_dev_, (GraphElem*)indices_dev_, e0, local_nv);
+
+             nblocks = (nv_ > MAX_GRIDDIM) ? MAX_GRIDDIM : nv_;
+             fill_edges_community_ids_kernel<64><<<nblocks, 64>>>((GraphElem*)edges_dev_, (GraphElem*)indices_dev_, commIds_dev_, e0, local_nv_);
+
+             thrust::sort_by_key(edges_dev_ptr, edges_dev_ptr+local_ne, index_orders_dev_ptr);
+             cudaMemcpyAsync(index_orders, (GraphElem*)weights_dev_, sizeof(GraphElem)*local_ne, cudaMemcpyDeviceToHost, cuStreams[0]);     
+
+             //reorder the edges
+             GraphElem* index_orders_dev = (GraphElem*)weights_dev_; 
+             cudaMemcpyAsync(edges_dev_, edges_+e0, sizeof(GraphElem)*local_ne, cudaMemcpyHostToDevice, cuStreams[1]);
+
+             GraphElem nblocks = ((nv_+1)/2 > MAX_GRIDDIM) ? MAX_GRIDDIM : (nv_+1)/2;
+             reorder_edges_by_keys_kernel<32,64><<<nblocks, 64>>>((GraphElem*)edges_dev_, index_orders_dev, (GraphElem*)indices_dev_, e0, nv_); 
+             cudaMemcpyAsync(edges_, edges_dev_, sizeof(GraphElem)*ne_, cudaMemcpyDeviceToHost, 0);
+
+            //reorder the weights
+            index_orders_dev = (GraphElem*)edges_dev_;
+            cudaMemcpyAsync(weights_dev_, edge_weights_, sizeof(GraphWeight)*ne_, cudaMemcpyHostToDevice, cuStreams[0]);
+            cudaMemcpyAsync(index_orders_dev, index_orders, sizeof(GraphElem)*ne_, cudaMemcpyHostToDevice, cuStreams[1]);
+            reorder_weights_by_keys_kernel<32,64><<<nblocks,64>>>((GraphWeight*)weights_dev_, index_orders_dev, (GraphElem*)indices_dev_, nv_);
+            cudaMemcpyAsync(edge_weights_, weights_dev_, sizeof(GraphWeight)*ne_, cudaMemcpyDeviceToHost, 0);
+         }
+         for(int i = 0; i < NUM_STREAMS; ++i)
+             cudaStreamDestroy(cuStreams[i]);
+
+         cudaHostUnregister(commIds);
+         cudaHostUnregister(index_orders);
+     }
+#endif
         // Memory: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
 #ifdef USE_CUDA
         inline void nbrscan_cuda()
@@ -262,7 +387,7 @@ class Graph
             GraphElem nblocks = (nv_ > 65535) ? 65535 : nv_;
             nbrscan_kernel<64><<<nblocks, 64>>>(edge_weights_dev_, edge_list_dev_, 
                                                   edge_indices_dev_, nv_);
-            cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
+            //cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
 #endif
         inline void nbrscan() 
@@ -289,10 +414,6 @@ class Graph
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-//#pragma omp target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
-map(to:edge_list_[0:ne_]) map(from:edge_weights_[0:ne_])
-//#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:edge_weights_[0:ne_])
-//#pragma omp teams distribute parallel for
            Edge* edge_list_ptr = edge_list_;
            GraphWeight* edge_weights_ptr = edge_weights_;
            GraphElem* edge_indices_ptr = edge_indices_;
@@ -338,7 +459,7 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
             GraphElem nblocks = (nv_ > 65535) ? 65535 : nv_;
             nbrsum_kernel<64><<<nblocks, 64>>>(vertex_degree_dev_, edge_list_dev_,
                                                   edge_indices_dev_, nv_);
-            cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
+            //cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
             //cudaDeviceSynchronize();
         }
 
@@ -385,7 +506,8 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 #ifdef USE_OMP_TASKS_FOR
                 #pragma omp task
 		    {
-#endif
+#endif                  
+                     vertex_degree_[i] = 0;
 #if defined USE_OMP_ACCELERATOR
                 for (GraphElem e = edge_indices_ptr[i]; e < edge_indices_ptr[i+1]; e++)
                 {
@@ -417,7 +539,7 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
             nbrmax_kernel<64><<<nblocks, 64>>>(vertex_degree_dev_, edge_list_dev_,
                                                   edge_indices_dev_, nv_);
             //cudaDeviceSynchronize();
-            cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
+            //cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
 #endif
         inline void nbrmax() 
@@ -562,6 +684,18 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
         GraphElem *edge_indices_;
         Edge *edge_list_;
         GraphWeight *edge_weights_, *vertex_degree_;
+        GraphElem* edges_;
+        GraphElem max_order_;
+   
+        GraphElem get_num_vertices() { return nv_;};
+        GraphElem get_num_edges() {return ne_;};
+        GraphElem get_max_order() { return max_order_;}; 
+        GraphElem*    get_index_ranges() {return edge_indices_;};
+        GraphWeight*  get_edge_weights() {return edge_weights_;};
+        GraphElem*    get_edges() {return edges_;};
+        GraphWeight*  get_vertex_weights() { return vertex_degree_;}; 
+        void* get_edge_list() {return edge_list_;};
+
 #ifdef USE_CUDA
         void map_data_on_device()
         {
@@ -583,14 +717,41 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
             cudaFree(edge_weights_dev_);
             cudaFree(vertex_degree_dev_);
         }
-
-        
+        /*
+        void allocate(const GraphElem& nv_per_batch) 
+        {
+            cudaMalloc(&edges_dev_, sizeof(GraphElem)*ne_);
+            cudaMalloc(&indices_dev_, sizeof(GraphElem)*(nv_+1));
+            cudaMalloc(&weights_dev_, sizeof(GraphWeight)*ne_);
+            cudaMalloc(&commIds_dev_, sizeof(GraphElem)*nv_);
+            edges_ = new GraphElem [ne_]; 
+        }
+        void deallocate()
+        {
+            cudaFree(edges_dev_);
+            cudaFree(indices_dev_);
+            cudaFree(weights_dev_);
+            cudaFree(commIds_dev_);
+            delete [] edges_;
+        }*/
 #endif
     private:
 #ifdef USE_CUDA
+        //indices to locate the range of edges for each vertex
         GraphElem *edge_indices_dev_;
+        //edge list storing vertices and weights
         Edge *edge_list_dev_;
         GraphWeight *edge_weights_dev_, *vertex_degree_dev_;
+        //void* edges01_, *edges02_;
+
+        //GraphElem* edges_;
+        //GraphElem max_degrees;
+        
+        //void* edges_dev_;
+        //void* indices_dev_;
+        //void* weights_dev_;
+
+        //GraphElem* commIds_dev_;
 #endif
         GraphElem nv_, ne_;
 };

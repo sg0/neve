@@ -51,14 +51,24 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <cuda.h>
+#include <cmath>
 
 #ifdef LLNL_CALIPER_ENABLE
 #include <caliper/cali.h>
 #include <caliper/cali-manager.h>
 #endif
-
+#include "graph_gpu.hpp"
+unsigned seed;
 #include "graph.hpp"
-#include "types.hpp"
+#include "cuda_wrapper.hpp"
+#include <random>
+#ifdef USE_32_BIT_GRAPH
+typedef std::mt19937 Mt19937;
+#else
+typedef std::mt19937_64 Mt19937;
+#endif
+
 // A lot of print diagnostics is lifted from
 // the STREAM benchmark.
 
@@ -71,6 +81,17 @@ static bool randomNumberLCG = false;
 
 // parse command line parameters
 static void parseCommandLine(int argc, char** argv);
+
+static void randomize_weights(Edge* w, const GraphElem& ne)
+{
+    //std::random_device dev;
+    Mt19937 rng;
+    //std::default_random_engine rng;
+    std::uniform_real_distribution<GraphWeight> distribution(0.,1.);
+
+    for(GraphElem i = 0; i < ne; ++i)
+        w[i].weight_ = distribution(rng);
+}
 
 int main(int argc, char **argv)
 {
@@ -101,6 +122,8 @@ int main(int argc, char **argv)
     g->print_stats();
     assert(g != nullptr);
 
+    //randomize_weights((Edge*)(g->get_edge_list()), g->get_num_edges());
+
     td1 = omp_get_wtime();
     td = td1 - td0;
 
@@ -122,7 +145,7 @@ int main(int argc, char **argv)
     const GraphElem ne = g->get_ne();
 #ifdef EDGE_AS_VERTEX_PAIR
     const std::size_t count_nbrscan = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) 
-        + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight)); 
+        + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight));
     const std::size_t count_nbrsum = 2*nv*sizeof(GraphElem) + 3*ne*sizeof(GraphWeight) 
         + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight));
     const std::size_t count_nbrmax = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) + nv*sizeof(GraphWeight)
@@ -190,10 +213,10 @@ int main(int argc, char **argv)
         g->nbrscan();
         times[0][k] = omp_get_wtime() - times[0][k];
         times[1][k] = omp_get_wtime();
-        g->nbrsum();
+        g->nbrmax();
         times[1][k] = omp_get_wtime() - times[1][k];
         times[2][k] = omp_get_wtime();
-        g->nbrmax();
+        g->nbrsum();
         times[2][k] = omp_get_wtime() - times[2][k];
     }
 
@@ -207,7 +230,7 @@ int main(int argc, char **argv)
         }
     }
 
-    std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
+    std::string label[3] = {"Neighbor Copy:    ", "Neighbor Max :    ", "Neighbor Add :    "};
     double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
 
     printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
@@ -219,7 +242,102 @@ int main(int argc, char **argv)
                 maxtime[j]);
     }
 #endif
+
+    //perform the batching gpu part
+    float times_cuda[3][NTIMES]; 
+    double avgtime_cuda[3] = {0}, maxtime_cuda[3] = {0}, mintime_cuda[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
+
+    GraphGPU* g_cuda = new GraphGPU(g);
+    //for gpu timer
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
     
+    GraphWeight* e_ws = new GraphWeight [ne];
+    GraphWeight* v_ws = new GraphWeight [nv];
+    g->nbrscan();
+    GraphWeight* weights = g->get_edge_weights();
+    std::copy(weights, weights+ne,e_ws);
+
+    for (int k = 0; k < NTIMES; k++)
+    {
+        cudaEventRecord(start, 0);
+        g_cuda->scan_edge_weights();
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&times_cuda[0][k], start, stop);
+    }
+    //check results; 
+    GraphWeight err = 0.;
+    for(GraphElem i = 0; i < ne; ++i)
+        err += std::pow(weights[i]-e_ws[i],2);
+    std::cout << "function scan error: " << err << std::endl;
+
+    g->nbrmax();
+    weights = g->get_vertex_weights();
+    GraphWeight* weights_dev = (GraphWeight*)(g_cuda->get_vertex_weights());
+
+    //std::copy(weights, weights+nv, v_ws);
+    for (int k = 0; k < NTIMES; k++)
+    {
+        cudaEventRecord(start, 0);
+        g_cuda->max_vertex_weights();
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&times_cuda[1][k], start, stop);
+    }
+    //check resutls
+    CudaMemcpyDtoH(v_ws, weights_dev, sizeof(GraphWeight)*nv);
+    err = 0.;
+    for(GraphElem i = 0; i < nv; ++i)
+        err += std::pow(weights[i]-v_ws[i],2);
+    std::cout << "function of max weights: "<< err << std::endl;
+
+    g->nbrsum();
+    //std::copy(weights, weights+nv, v_ws);
+    for (int k = 0; k < NTIMES; k++)   
+    {   
+        cudaEventRecord(start, 0);      
+        g_cuda->sum_vertex_weights();
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&times_cuda[2][k], start, stop);
+    }
+    //check results
+    CudaMemcpyDtoH(v_ws, weights_dev, sizeof(GraphWeight)*nv);
+    err = 0.;
+    for(GraphElem i = 0; i < nv; ++i)
+        err += std::pow(weights[i]-v_ws[i],2);
+    std::cout << "function of sum weights: "<< err << std::endl;
+
+    delete [] e_ws;
+    delete [] v_ws;
+
+    for (int k = 1; k < NTIMES; k++) // note -- skip first iteration
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            avgtime_cuda[j] = avgtime_cuda[j] + times_cuda[j][k];
+            mintime_cuda[j] = std::min(mintime_cuda[j], (double)times_cuda[j][k]);
+            maxtime_cuda[j] = std::max(maxtime_cuda[j], (double)times_cuda[j][k]);
+        }
+    }
+
+    //std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
+    //double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
+
+    printf("				GPU Profile				  \n");
+    printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
+    for (int j = 0; j < 3; j++)
+    {
+        avgtime_cuda[j] = avgtime_cuda[j]/(double)(NTIMES-1);
+        std::printf("%s%12.1f  %12.6f  %11.6f  %11.6f\n", label[j].c_str(),
+                1.0E-06 * bytes[j]/mintime_cuda[j]*1.0E03, avgtime_cuda[j]*1.0E-03, 
+                mintime_cuda[j]*1.0E-03,maxtime_cuda[j]*1.0E-03);
+    }
+    delete g_cuda;
+    delete g;
     return 0;
 }
 

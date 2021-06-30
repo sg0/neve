@@ -85,13 +85,19 @@
 #define SR_LCG_TAG                  108
 #endif
 
+//#define MAX_GRIDDIM                 65535
 #include <random>
 #include <utility>
 #include <cstring>
 
+#if 0
 #ifdef USE_32_BIT_GRAPH
 using GraphElem = int32_t;
 using GraphWeight = float;
+#ifdef USE_CUDA
+using GraphElem2 = int2;
+using GraphWeight2 = float2;
+#endif
 #if defined(USE_SHARED_MEMORY)
 typedef std::aligned_storage<sizeof(GraphElem),alignof(GraphElem)>::type __GraphElem__;
 typedef std::aligned_storage<sizeof(GraphWeight),alignof(GraphWeight)>::type __GraphWeight__;
@@ -102,6 +108,10 @@ const MPI_Datatype MPI_WEIGHT_TYPE = MPI_FLOAT;
 #else
 using GraphElem = int64_t;
 using GraphWeight = double;
+#ifdef USE_CUDA
+using GraphElem2 = longlong2;
+using GraphWeight2 = double2;
+#endif
 #if defined(USE_SHARED_MEMORY)
 typedef std::aligned_storage<sizeof(GraphElem),alignof(GraphElem)>::type __GraphElem__;
 typedef std::aligned_storage<sizeof(GraphWeight),alignof(GraphWeight)>::type __GraphWeight__;
@@ -111,14 +121,33 @@ const MPI_Datatype MPI_WEIGHT_TYPE = MPI_DOUBLE;
 #endif
 #endif
 
+#ifdef EDGE_AS_VERTEX_PAIR
+struct Edge
+{   
+    GraphElem head_, tail_;
+    GraphWeight weight_;
+    
+    Edge(): head_(-1), tail_(-1), weight_(0.0) {}
+};
+#else
+struct Edge
+{   
+    GraphElem tail_;
+    GraphWeight weight_;
+    
+    Edge(): tail_(-1), weight_(0.0) {}
+};
+#endif
+#endif
+
 extern unsigned seed;
 
 // Is nprocs a power-of-2?
-int is_pwr2(int pes) 
+inline int is_pwr2(int pes) 
 { return ((pes != 0) && !(pes & (pes - 1))); }
 
 // return unint32_t seed
-GraphElem reseeder(unsigned initseed)
+inline GraphElem reseeder(unsigned initseed)
 {
     std::seed_seq seq({initseed});
     std::vector<std::uint32_t> seeds(1);
@@ -212,7 +241,7 @@ class LCG
             global_op[3] = 1;
 
             mat_power(global_op, n_);        // M^(n/p)
-            GraphElem prefix_op[4] = {1,0,0,1};  // I in row-major
+            //GraphElem prefix_op[4] = {1,0,0,1};  // I in row-major
             
             // populate the first random number entry - (x0*a + b)%P
             rnums_[0] = x0_;
@@ -469,16 +498,16 @@ class LCG
 std::atomic_flag lkd_ = ATOMIC_FLAG_INIT;
 #else
 #include <mutex>
-std::mutex mtx_;
+extern std::mutex mtx_;
 #endif
-void lock() {
+inline void lock() {
 #ifdef USE_SPINLOCK 
     while (lkd_.test_and_set(std::memory_order_acquire)) { ; } 
 #else
     mtx_.lock();
 #endif
 }
-void unlock() { 
+inline void unlock() { 
 #ifdef USE_SPINLOCK 
     lkd_.clear(std::memory_order_release); 
 #else
