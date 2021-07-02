@@ -132,36 +132,36 @@ class Graph
         Graph(GraphElem nv, GraphElem ne): 
             nv_(nv), ne_(ne) 
         {
-            /*#ifdef USE_PINNED_HOST
+            #ifdef USE_PINNED_HOST
             cudaMallocHost((void**)&edge_indices_, sizeof(GraphElem)*(nv_+1));
             cudaMallocHost((void**)&edge_list_, sizeof(Edge)*ne_);
             cudaMallocHost((void**)&vertex_degree_, sizeof(GraphWeight)*nv_);
             cudaMallocHost((void**)&edge_weights_, sizeof(GraphWeight)*ne_);
             cudaMallocHost((void**)&edges_, sizeof(GraphElem)*ne_);
-            #else*/
+            #else
             edge_indices_   = new GraphElem[nv_+1];
             edge_list_      = new Edge[ne_];
             vertex_degree_  = new GraphWeight[nv_];
             edge_weights_   = new GraphWeight[ne_];
             edges_ = new GraphElem[ne_];
-            //#endif
+            #endif
         }
 
         ~Graph() 
         {
-            /*#ifdef USE_PINNED_HOST
+            #ifdef USE_PINNED_HOST
             cudaFreeHost(edge_indices_);
             cudaFreeHost(edge_list_);
             cudaFreeHost(vertex_degree_);
             cudaFreeHost(edge_weights_);
             cudaFreeHost(edges_);
-            #else*/
+            #else
             delete [] edge_indices_;
             delete [] edge_list_;
             delete [] edge_weights_;
             delete [] vertex_degree_;
             delete [] edges_;
-            //#endif
+            #endif
         }
          
         void set_edge_index(GraphElem const vertex, GraphElem const e0)
@@ -185,14 +185,15 @@ class Graph
         void set_nedges(GraphElem ne) 
         { 
             ne_ = ne;
-            /*#ifdef USE_PINNED_HOST
+            #ifdef USE_PINNED_HOST
             cudaMallocHost((void**)&edge_list_, sizeof(Edge)*ne_);
             cudaMallocHost((void**)&edge_weights_,sizeof(GraphWeight)*ne_);
-            #else*/
+            cudaMallocHost((void**)&edges_, sizeof(GraphElem)*ne_);
+            #else
             edge_list_      = new Edge[ne_];
             edge_weights_   = new GraphWeight[ne_];
             edges_ = new GraphElem[ne_];
-            //#endif
+            #endif
         }
 
 

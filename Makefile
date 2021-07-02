@@ -1,4 +1,5 @@
 ENABLE_OMP_OFFLOAD=1
+ENABLE_PINNED=1
 CXX = g++
 ifeq ($(ENABLE_OMP_OFFLOAD),1)
 CXX = clang++
@@ -23,8 +24,8 @@ CXXFLAGS_THREADS += -fopenmp-targets=nvptx64 -Xopenmp-target=nvptx64 -march=sm_$
 endif
 CXXFLAGS_THREADS += -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-I/usr/lib/gcc/x86_64-redhat-linux/4.8.5/include/
 
-CUFLAGS = -O3 --std=c++14 --gpu-architecture=compute_${SM} --gpu-code=sm_${SM},compute_${SM} \
--Xcompiler -fopenmp -DUSE_SHARED_MEMORY -DUSE_CUDA -DGRAPH_FT_LOAD=2 -DNTIMES=20
+CUFLAGS = -O3 -Xptxas -O3 --std=c++14 --gpu-architecture=compute_${SM} --gpu-code=sm_${SM},compute_${SM} \
+-Xcompiler -O3 -Xcompiler -fopenmp -DUSE_SHARED_MEMORY -DUSE_CUDA -DGRAPH_FT_LOAD=2 -DNTIMES=20 
 ifeq ($(ENABLE_PINNED),1)
 CUFLAGS += -DUSE_PINNED_HOST
 endif
@@ -62,20 +63,24 @@ SRC_MPI = main.cpp
 TARGET_MPI = neve_mpi 
 OBJ_THREADS = main_threads.o
 OBJ_CUDA = main_cuda.o
+OBJ_CUDA_BATCH = main_cuda_batch.o graph_gpu.o graph_cuda.o
+OBJ_CUDA_SORT = main_cuda_sort.o graph_gpu.o graph_cuda.o
 SRC_THREADS = main_threads.cpp
 SRC_CUDA = main_cuda.cpp
 TARGET_THREADS = neve_threads
 TARGET_CUDA = neve_cuda
 TARGET_CUDA_BATCH = neve_cuda_batch
+TARGET_CUDA_SORT = neve_cuda_sort
 
-OBJS = $(OBJ_MPI) $(OBJ_THREADS) ${OBJ_CUDA}
-TARGETS = $(TARGET_MPI) $(TARGET_THREADS) ${TARGET_CUDA}
+OBJS = $(OBJ_MPI) $(OBJ_THREADS) ${OBJ_CUDA} ${OBJ_CUDA_BATCH} ${OBJ_CUDA_SORT}
+TARGETS = $(TARGET_MPI) $(TARGET_THREADS) ${TARGET_CUDA} ${TARGET_CUDA_BATCH} ${TARGET_CUDA_SORT}
 
 all: $(TARGETS)
 mpi: $(TARGET_MPI)
 threads: $(TARGET_THREADS)
 cuda: ${TARGET_CUDA}
 cuda_batch: ${TARGET_CUDA_BATCH}
+cuda_sort: ${TARGET_CUDA_SORT}
 
 $(TARGET_MPI):  $(OBJ_MPI)
 	$(LDAPP) $(MPICXX) -o $@ $+ $(LDFLAGS) $(CXXFLAGS) 
@@ -92,13 +97,19 @@ ${TARGET_CUDA}:  $(OBJ_CUDA)
 ${TARGET_CUDA_BATCH}: main_cuda_batch.o graph_cuda.o graph_gpu.o
 	$(NVCC) $(CUFLAGS) -o $@ $^
 
+${TARGET_CUDA_SORT}:  main_cuda_sort.o graph_cuda.o graph_gpu.o
+	 $(NVCC) $(CUFLAGS) -o $@ $^
+
 $(OBJ_THREADS): $(SRC_THREADS)
 	$(CXX) $(INCLUDE) $(CXXFLAGS) $(CXXFLAGS_THREADS) -c $< -o $@
 
 ${OBJ_CUDA}: ${SRC_CUDA} graph.cuh
 	$(NVCC) $(INCLUDE) -x cu $(CUFLAGS) -dc $< -o $@
 
-main_cuda_batch.o: main_cuda_batch.cpp graph.hpp
+main_cuda_batch.o: main_cuda_batch.cpp graph.hpp graph_gpu.hpp
+	$(NVCC) $(INCLUDE) -x cu $(CUFLAGS) -dc $< -o $@
+
+main_cuda_sort.o: main_cuda_sort.cpp graph.hpp graph_gpu.hpp
 	$(NVCC) $(INCLUDE) -x cu $(CUFLAGS) -dc $< -o $@
 
 graph_cuda.o:graph_cuda.cu graph_cuda.hpp 
