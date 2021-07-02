@@ -115,4 +115,41 @@ GraphElem max_order_cuda
     GraphElem nv,
     cudaStream_t stream = 0
 );
+
+void move_index_orders_cuda
+(
+    GraphElem* dest,
+    GraphElem* src,
+    const GraphElem& v0,
+    const GraphElem& v1,
+    const GraphElem& e0,
+    const GraphElem& e1,
+    cudaStream_t stream = 0
+);
+
+void reorder_edges_by_keys_cuda
+(
+    GraphElem* edges, 
+    GraphElem* indexOrders, 
+    GraphElem* indices, 
+    GraphElem* buff, 
+    const GraphElem& v0, 
+    const GraphElem& v1,  
+    const GraphElem& e0, 
+    const GraphElem& e1,
+    cudaStream_t stream = 0 
+);
+
+void reorder_weights_by_keys_cuda
+( 
+    GraphWeight* edgeWeights, 
+    GraphElem* indexOrders, 
+    GraphElem* indices , 
+    GraphWeight* buff, 
+    const GraphElem& v0, 
+    const GraphElem& v1,  
+    const GraphElem& e0, 
+    const GraphElem& e1,
+    cudaStream_t stream = 0
+);
 #endif

@@ -188,9 +188,9 @@ void fill_edges_community_ids_kernel
         {
             GraphElem commId = commIds[edges[i]];    
             #ifdef USE_32BIT_GRAPH
-            commIdKeys[i] = make_int2(u,commId);
+            commIdKeys[i] = make_int2(u, commId);
             #else
-            commIdKeys[i] = make_longlong2(u,commId);
+            commIdKeys[i] = make_longlong2(u, commId);
             #endif
         }
         warp.sync();
@@ -270,6 +270,53 @@ void fill_index_orders_cuda
     (indexOrders, indices, v0, e0, nv);
 }
 
+#if 0
+template<const int WarpSize, const int blocksize>
+__global__
+void sum_vertex_weights_kernel
+(GraphWeight* __restrict__ vertex_degree, GraphWeight* __restrict__ weights,
+GraphElem* __restrict__ edge_indices, const GraphElem v_base,
+    const GraphElem e_base,
+    const GraphElem nv
+)
+{
+    __shared__ GraphElem range[2];
+    volatile  __shared__ GraphWeight data[blocksize];
+    GraphElem step = gridDim.x;
+    for(GraphElem i = blockIdx.x; i < nv; i += step)
+    {
+        GraphWeight w = 0.;
+        if(threadIdx.x < 2)
+            range[threadIdx.x] = edge_indices[i+threadIdx.x+v_base];
+        __syncthreads();
+
+        GraphElem start = range[0]-e_base;
+        GraphElem end = range[1]-e_base;
+
+        //GraphElem start = edge_indices[i];
+        //GraphElem end = edge_indices[i+1];
+        for(GraphElem e = start+threadIdx.x; e < end; e += blocksize)
+            w += weights[e];
+        data[threadIdx.x] = w;
+        __syncthreads();
+        for (unsigned int s=blocksize/2; s>=32; s>>=1)
+        {
+            if (threadIdx.x < s)
+                data[threadIdx.x] += data[threadIdx.x + s];
+            __syncthreads();
+        }
+        w = data[threadIdx.x%32];
+        //__syncthreads();
+        for (int offset = 16; offset > 0; offset /= 2)
+            w += __shfl_down_sync(0xffffffff, w, offset);
+
+        if(threadIdx.x == 0)
+            vertex_degree[i+v_base] = w;
+        __syncthreads();
+    }
+}
+#endif
+//#if 0
 template<const int WarpSize, const int BlockSize>
 __global__
 void sum_vertex_weights_kernel
@@ -315,6 +362,63 @@ void sum_vertex_weights_kernel
         warp.sync();
     }
 }
+//#endif
+
+#if 0
+template<const int WarpSize, const int BlockSize>
+__global__
+void sum_vertex_weights_kernel
+(
+    GraphWeight* __restrict__ vertex_weights, 
+    GraphWeight* __restrict__ weights,
+    GraphElem*   __restrict__ indices,
+    const GraphElem v_base,
+    const GraphElem e_base,
+    const GraphElem nv
+)
+{   
+    __shared__ GraphElem ranges[BlockSize];
+
+    cg::thread_block block = cg::this_thread_block();
+    cg::thread_block_tile<WarpSize> warp = cg::tiled_partition<WarpSize>(block);
+
+    const unsigned block_tid = block.thread_rank();
+    const unsigned warp_tid = warp.thread_rank();
+
+    GraphElem* t_ranges = &ranges[(block_tid/WarpSize)*WarpSize];
+
+    GraphElem nu = (nv + gridDim.x*(BlockSize/WarpSize)-1) / (gridDim.x*(BlockSize/WarpSize));
+    GraphElem u0 = (BlockSize/WarpSize*blockIdx.x+block_tid/WarpSize)*nu;
+    nu = ((u0+nu > nv) ? nv-u0 : nu);
+
+    GraphElem start, end;
+    start = indices[u0+v_base]-e_base;
+
+    for(GraphElem u = 0; u < nu; ++u)
+    {
+        if(u%WarpSize == 0)
+        {
+            warp.sync();
+            if(u+warp_tid < nu)
+                t_ranges[warp_tid] = indices[u0+u+warp_tid+v_base+1];
+            warp.sync();
+        }
+        end = t_ranges[u%WarpSize]-e_base;
+
+        GraphWeight w = 0.; 
+        for(GraphElem e = start+warp_tid; e < end; e += WarpSize)
+            w += weights[e];
+        warp.sync();
+
+        for(int i = warp.size()/2; i > 0; i/=2)
+            w += warp.shfl_down(w, i);
+ 
+        if(warp_tid == 0) 
+            vertex_weights[u+u0+v_base] = w;
+        start = end;
+    }
+}
+#endif
 
 void sum_vertex_weights_cuda
 (
@@ -625,3 +729,280 @@ GraphElem max_order_cuda
     CudaFree(max_reduced);
     return max;
 }
+
+template<const int BlockSize>
+__global__
+void move_index_orders_kernel
+(
+    GraphElem* __restrict__ dest, 
+    GraphElem* __restrict__ src, 
+    const GraphElem n
+)
+{
+    const int i0 = threadIdx.x + BlockSize*blockIdx.x;
+    for(GraphElem i = i0; i < n; i += BlockSize*gridDim.x)
+        dest[i] = src[i]; 
+}
+
+void move_index_orders_cuda
+(
+    GraphElem* dest, 
+    GraphElem* src, 
+    const GraphElem& v0, 
+    const GraphElem& v1, 
+    const GraphElem& e0, 
+    const GraphElem& e1,
+    cudaStream_t stream = 0
+)
+{
+    GraphElem ne = e1-e0;
+    long long nblocks = (ne > MAX_GRIDDIM) ? MAX_GRIDDIM : ne;
+    move_index_orders_kernel<BLOCKDIM02><<<nblocks, BLOCKDIM02, 0, stream>>>(dest, src, ne);
+}
+
+template<const int WarpSize, const int BlockSize>
+__global__
+void reorder_edges_by_keys_kernel
+(
+    GraphElem* __restrict__ edges,
+    GraphElem* indexOrders,
+    GraphElem* __restrict__ indices,
+    GraphElem* buff,
+    const GraphElem v_base,
+    const GraphElem e_base,
+    const GraphElem nv
+)
+{
+    __shared__ GraphElem ranges[(BlockSize/WarpSize)*2];
+
+    cg::thread_block block = cg::this_thread_block();
+    cg::thread_group warp = cg::tiled_partition<WarpSize>(block);
+
+    const unsigned block_tid = block.thread_rank();
+    const unsigned warp_tid  = warp.thread_rank();
+
+    GraphElem* t_ranges = &ranges[(block_tid/WarpSize)*2];
+
+    GraphElem u0 = block_tid/WarpSize+BlockSize/WarpSize*blockIdx.x;
+    for(GraphElem u = u0; u < nv; u += (BlockSize/WarpSize)*gridDim.x)
+    {
+        if(warp_tid < 2)
+            t_ranges[warp_tid] = indices[u+warp_tid+v_base];
+        warp.sync();
+
+        GraphElem start = t_ranges[0]-e_base; 
+        GraphElem end = t_ranges[1]-e_base;
+        for(GraphElem i = start+warp_tid; i < end; i += WarpSize)
+        {
+            GraphElem pos = indexOrders[i];
+            buff[i] = edges[pos+start];
+        }
+        warp.sync();
+        for(GraphElem i = start+warp_tid; i < end; i += WarpSize)
+            edges[i] = buff[i];
+        warp.sync();
+    } 
+}
+
+void reorder_edges_by_keys_cuda
+(
+    GraphElem* edges, 
+    GraphElem* indexOrders, 
+    GraphElem* indices, 
+    GraphElem* buff, 
+    const GraphElem& v0, 
+    const GraphElem& v1,  
+    const GraphElem& e0, 
+    const GraphElem& e1,
+    cudaStream_t stream = 0
+)
+{
+    GraphElem nv = v1-v0;
+    long long nblocks = (nv/(BLOCKDIM01/WARPSIZE) > MAX_GRIDDIM) ? MAX_GRIDDIM : nv/(BLOCKDIM01/WARPSIZE);
+    reorder_edges_by_keys_kernel<WARPSIZE,BLOCKDIM01><<<nblocks, BLOCKDIM01, 0, stream>>>(edges, indexOrders, indices, buff, v0, e0, nv);
+}
+
+template<const int WarpSize, const int BlockSize>
+__global__
+void reorder_weights_by_keys_kernel
+(
+    GraphWeight* __restrict__ edgeWeights,
+    GraphElem*   indexOrders,
+    GraphElem*   __restrict__ indices,
+    GraphWeight* buff,
+    const GraphElem v_base,
+    const GraphElem e_base,
+    const GraphElem nv
+)
+{
+    __shared__ GraphElem ranges[(BlockSize/WarpSize)*2];
+
+    cg::thread_block block = cg::this_thread_block();
+    cg::thread_group warp = cg::tiled_partition<WarpSize>(block);
+
+    const unsigned block_tid = block.thread_rank();
+    const unsigned warp_tid  = warp.thread_rank();
+
+    GraphElem* t_ranges = &ranges[(block_tid/WarpSize)*2];
+
+    GraphElem u0 = block_tid/WarpSize+BlockSize/WarpSize*blockIdx.x;
+    for(GraphElem u = u0; u < nv; u += (BlockSize/WarpSize)*gridDim.x)
+    {
+        if(warp_tid < 2)
+            t_ranges[warp_tid] = indices[u+warp_tid+v_base];
+        warp.sync();
+
+        GraphElem start = t_ranges[0]-e_base; 
+        GraphElem end   = t_ranges[1]-e_base;
+        for(GraphElem i = start+warp_tid; i < end; i += WarpSize)
+        {
+            GraphElem pos = indexOrders[i];
+            buff[i] = edgeWeights[pos+start];
+        }
+        warp.sync();
+        for(GraphElem i = start+warp_tid; i < end; i += WarpSize)
+            edgeWeights[i] = buff[i];
+        warp.sync();
+    } 
+}
+
+void reorder_weights_by_keys_cuda
+( 
+    GraphWeight* edgeWeights, 
+    GraphElem* indexOrders, 
+    GraphElem* indices , 
+    GraphWeight* buff, 
+    const GraphElem& v0, 
+    const GraphElem& v1,  
+    const GraphElem& e0, 
+    const GraphElem& e1,
+    cudaStream_t stream = 0
+)
+{
+    GraphElem nv = v1-v0;
+    GraphElem nblocks = (nv/(BLOCKDIM01/WARPSIZE) > MAX_GRIDDIM) ? MAX_GRIDDIM : nv/(BLOCKDIM01/WARPSIZE);
+    reorder_weights_by_keys_kernel<WARPSIZE,BLOCKDIM01><<<nblocks, BLOCKDIM01,0,stream>>>(edgeWeights, indexOrders, indices, buff, v0, e0, nv);
+}
+#if 0
+template<const int WarpSize, const int BlockSize>
+__global__
+void build_local_commid_offset_kernel
+(
+    GraphElem* offset,
+    GraphElem* edges,
+    GraphElem* indices,
+    GraphElem* commIds,
+    GraphElem nv
+)
+{
+    
+}
+
+void build_local_commid_offset_cuda
+(
+)
+{
+
+}
+
+void compute_vertex_self_weight
+(
+    GraphWeight* vertexSelfWeights,
+    GraphElem*   edges,
+    GraphWeight* edgesWeights,
+    GraphElem* indices,
+    const GraphElem& nv,
+    cosnt GraphElem& ne,
+    cudaStream_t stream =0
+)
+{
+
+}
+#endif
+#if 0
+void compute_modularity_cuda
+(
+    GraphWeight* vertexSelfWeights,
+    GraphWeight* commWeights,
+    GraphWeight* m,
+    const GraphElem& nv
+)
+{
+
+}
+#endif
+#if 0
+//#else
+
+template<const int WarpSize, const int BlockSize>
+__global__
+void fill_edges_community_ids_kernel
+(
+    GraphElem2* __restrict__ commIdKeys,
+    GraphElem*  __restrict__ edges,
+    GraphElem*  __restrict__ indices,
+    GraphElem*  __restrict__ commIds,
+    const GraphElem v_base, 
+    const GraphElem e_base,
+    const GraphElem nv
+)
+{
+    __shared__  GraphElem ranges[BlockSize];
+
+    cg::thread_block block = cg::this_thread_block();
+    cg::thread_group warp = cg::tiled_partition<WarpSize>(block);
+
+    const unsigned block_tid = block.thread_rank();
+    const unsigned warp_tid = warp.thread_rank();
+
+    GraphElem* t_ranges = &ranges[(block_tid/WarpSize)*WarpSize];
+
+    GraphElem nu = (nv + gridDim.x-1) / gridDim.x;
+    GraphElem u0 = blockIdx.x*nu;
+    GraphElem u1 = u0 + nu;
+    if(u1 > nv) 
+        u1 = nv;
+    GraphElem start, end;
+    start = indices[u0+v_base]-e_base;
+    for(GraphElem u = 0; u < nu; ++u)
+    {
+        if(u%WarpSize == 0)
+        {
+            warp.sync();
+            if(u+warp_tid <= nu)
+                t_ranges[warp_tid] = indices[u0+u+warp_tid+v_base+1];
+            warp.sync();
+        }
+        end = t_ragnes[u%WarpSize]-e_base;
+        for(GraphElem i = start+warp_id; i < end; i += WarpSize)
+        {
+            GraphElem commId = commIds[edges[i]];    
+            #ifdef USE_32BIT_GRAPH
+            commIdKeys[i] = make_int2(u, commId);
+            #else
+            commIdKeys[i] = make_longlong2(u, commId);
+            #endif
+        }
+        start = end;
+    } 
+}
+
+void fill_edges_community_ids_cuda
+(
+    GraphElem2* commIdKeys, 
+    GraphElem* edges,
+    GraphElem* indices,
+    GraphElem* commIds,
+    const GraphElem& v0,
+    const GraphElem& v1,
+    const GraphElem& e0,
+    const GraphElem& e1,
+    cudaStream_t stream = 0
+)
+{
+    GraphElem nv = v1-v0;
+    long long nblocks = (nv/(BLOCKDIM01/WARPSIZE) > MAX_GRIDDIM) ? MAX_GRIDDIM : nv/(BLOCKDIM01/WARPSIZE);    
+    fill_edges_community_ids_kernel<WARPSIZE, BLOCKDIM01><<<nblocks, BLOCKDIM01, 0, stream>>>
+    (commIdKeys, edges, indices, commIds, v0, e0, nv);
+}
+#endif

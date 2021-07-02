@@ -1,5 +1,6 @@
 #ifndef GRAPH_GPU_HPP_
 #define GRAPH_GPU_HPP_
+#include <vector>
 #include "types.hpp"
 #include "graph.hpp"
 class GraphGPU
@@ -8,7 +9,7 @@ class GraphGPU
 
     Graph* graph_;
 
-    GraphElem nv_, ne_, nv_per_batch_;
+    GraphElem nv_, ne_, nv_per_batch_, ne_per_batch_;
 
     void *edges_;
     void *edgeWeights_;
@@ -25,6 +26,8 @@ class GraphGPU
     GraphElem* edgesHost_;
     GraphWeight* edgeWeightsHost_;
     GraphElem*  indexOrdersHost_;
+ 
+    std::vector<GraphElem> vertex_partition_;
 
   public:
     GraphGPU
@@ -52,6 +55,8 @@ class GraphGPU
     void sum_vertex_weights();
     void max_vertex_weights();
 
+    GraphElem determine_optimal_edges_per_batch (const GraphElem&, const GraphElem&, const unsigned&);
+    void determine_optimal_vertex_partition(GraphElem*, const GraphElem&, const GraphElem&, const GraphElem&, std::vector<GraphElem>&);
 
     GraphWeight* get_vertex_weights() { return vertexWeights_;};
     

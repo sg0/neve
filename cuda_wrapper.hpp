@@ -2,7 +2,7 @@
 #define CUDA_WRAPPER_HPP_
 
 #include <iostream>
-
+#ifdef debug
 #define CudaCall(ans) { CudaAssert((ans), __FILE__, __LINE__); }
 inline void CudaAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
@@ -14,6 +14,9 @@ inline void CudaAssert(cudaError_t code, const char *file, int line, bool abort=
           exit(code);
    }
 }
+#else
+#define CudaCall(ans) {ans;}
+#endif
 
 #ifdef debug
 #define CudaLaunch(kernel) \
@@ -36,7 +39,7 @@ inline void CudaAssert(cudaError_t code, const char *file, int line, bool abort=
 
 #define CudaMallocHost(ptr, size)\
 {\
-    CudaCall(cudaMalloc((void**)&ptr, size)); \
+    CudaCall(cudaMallocHost((void**)&ptr, size)); \
 }
 
 #define CudaMemcpyHtoD(dest, src, size)\
@@ -86,7 +89,7 @@ CudaCall(cudaDeviceSynchronize())
 //define some cuda kernel configuration
 #define TILESIZE	32
 #define WARPSIZE	32
-#define BLOCKDIM01	128
+#define BLOCKDIM01	64
 #define BLOCKDIM02	128
 #define MAX_GRIDDIM	65535
 
@@ -96,7 +99,7 @@ struct less_int2
     __host__ __device__ bool operator()(const int2& a, const int2& b)
     {
         return (a.x != b.x) ? (a.x < b.x) : (a.y < b.y);
-    }
+    };
 };
 #else
 struct less_int2
@@ -104,7 +107,7 @@ struct less_int2
     __host__ __device__ bool operator() (const longlong2& a, const longlong2& b)
     {
         return (a.x != b.x) ? (a.x < b.x) : (a.y < b.y);
-    }
+    };
 };
 #endif
 
