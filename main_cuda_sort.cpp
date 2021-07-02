@@ -105,13 +105,6 @@ static void set_random_commIds(GraphElem* commIds, const GraphElem& nv)
     for(GraphElem i = 0; i < nv; ++i)
         commIds[i] = distribution(rng);
 }
-/*
-typedef struct EdgeKey
-{
-    GraphElem id;
-    GraphElem e;
-} EdgeKey;
-*/
 typedef struct EdgeKey
 {
     GraphElem id;
@@ -119,7 +112,7 @@ typedef struct EdgeKey
     GraphWeight w;
 } EdgeKey;
 
-bool compare_edge_key (EdgeKey a , EdgeKey b)
+bool compare_edge_key (EdgeKey a, EdgeKey b)
 {
     return (a.id != b.id) ? (a.id < b.id) : (a.e < b.e);
 }
@@ -140,7 +133,7 @@ static void sort_edges_by_commids(GraphWeight* weights, GraphElem* edges, GraphE
             edges[i] = array[i-start].e;
             weights[i] = array[i-start].w;
         }
-        delete [] array;
+        delete [] array; 
     }
 }
 
@@ -215,12 +208,24 @@ int main(int argc, char **argv)
 
     std::cout << "sorting time on CPU is " << t1-t0 << " s" << std::endl;
 
-    /*double err = 0;
+    /*
+    double err = 0;
+    #pragma omp parallel for reduction(+:err)
     for(GraphElem i = 0; i < ne; ++i)
-        err += std::pow(weights_g[i]-weights[i],2);
+        err += std::pow(edges_g[i]-edges[i],2);
     std::cout << "error of the sorting edges: " << err << std::endl;
 
     err = 0.;
+    #pragma omp parallel for reduction(+:err)
+    for(GraphElem i = 0; i < ne; ++i)
+        err += std::pow(weights_g[i]-weights[i],2);
+    std::cout << "error of the sorting weights: " << err << std::endl;*/
+    /*t0 = omp_get_wtime();
+    sort_edges_by_commids(edges, indices, commIds, nv);
+    t1 = omp_get_wtime();
+    std::cout << "sorting time on CPU is " << t1-t0 << " s" << std::endl;
+
+    //err = 0;
     #pragma omp parallel for reduction(+:err)
     for(GraphElem i = 0; i < ne; ++i)
         err += std::pow(edges_g[i]-edges[i],2);
