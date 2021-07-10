@@ -388,6 +388,7 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
             GraphElem nblocks = (nv_ > 65535) ? 65535 : nv_;
             nbrscan_kernel<64><<<nblocks, 64>>>(edge_weights_dev_, edge_list_dev_, 
                                                   edge_indices_dev_, nv_);
+            cudaDeviceSynchronize();
             //cudaMemcpy(edge_weights_, edge_weights_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
 #endif
@@ -539,7 +540,7 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
             GraphElem nblocks = (nv_ > 65535) ? 65535 : nv_;
             nbrmax_kernel<64><<<nblocks, 64>>>(vertex_degree_dev_, edge_list_dev_,
                                                   edge_indices_dev_, nv_);
-            //cudaDeviceSynchronize();
+            cudaDeviceSynchronize();
             //cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
 #endif

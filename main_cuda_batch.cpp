@@ -122,7 +122,7 @@ int main(int argc, char **argv)
     g->print_stats();
     assert(g != nullptr);
 
-    //randomize_weights((Edge*)(g->get_edge_list()), g->get_num_edges());
+    randomize_weights((Edge*)(g->get_edge_list()), g->get_num_edges());
 
     td1 = omp_get_wtime();
     td = td1 - td0;

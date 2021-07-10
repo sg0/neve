@@ -11,6 +11,7 @@ using GraphWeight = float;
 #ifdef USE_CUDA
 using GraphElem2 = int2;
 using GraphWeight2 = float2;
+using Float2 = float2;
 #endif
 #if defined(USE_SHARED_MEMORY)
 typedef std::aligned_storage<sizeof(GraphElem),alignof(GraphElem)>::type __GraphElem__;
@@ -25,6 +26,7 @@ using GraphWeight = double;
 #ifdef USE_CUDA
 using GraphElem2 = longlong2;
 using GraphWeight2 = double2;
+using Float2 = double2;
 #endif
 #if defined(USE_SHARED_MEMORY)
 typedef std::aligned_storage<sizeof(GraphElem),alignof(GraphElem)>::type __GraphElem__;

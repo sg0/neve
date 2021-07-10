@@ -85,7 +85,7 @@ GraphElem* __restrict__ edge_indices, GraphElem nv)
             w += __shfl_down_sync(0xffffffff, w, offset);
 
         if(threadIdx.x == 0)
-            vertex_degree[i] += w;
+            vertex_degree[i] = w;
         __syncthreads();
     }
 }

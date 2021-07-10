@@ -61,6 +61,7 @@
 #include "types.hpp"
 #include "graph.hpp"
 #include "graph_gpu.hpp"
+
 #include <random>
 #ifdef USE_32_BIT_GRAPH
 typedef std::mt19937 Mt19937;
@@ -102,8 +103,8 @@ static void set_random_commIds(GraphElem* commIds, const GraphElem& nv)
     std::uniform_int_distribution<GraphElem> distribution(0,nv/16+1);
 
     for(GraphElem i = 0; i < nv; ++i)
-        //commIds[i] = distribution(rng);
-        commIds[i] = i;
+        commIds[i] = distribution(rng);
+        //commIds[i] = i;
 }
 typedef struct EdgeKey
 {
@@ -116,7 +117,7 @@ bool compare_edge_key (EdgeKey a, EdgeKey b)
 {
     return (a.id != b.id) ? (a.id < b.id) : (a.e < b.e);
 }
-
+/*
 static void sort_edges_by_commids(GraphWeight* weights, GraphElem* edges, GraphElem* indices, GraphElem* commIds, const GraphElem& nv)
 {
     #pragma omp parallel for
@@ -136,7 +137,7 @@ static void sort_edges_by_commids(GraphWeight* weights, GraphElem* edges, GraphE
         delete [] array; 
     }
 }
-
+*/
 int main(int argc, char **argv)
 {
     parseCommandLine(argc, argv);
@@ -169,15 +170,15 @@ int main(int argc, char **argv)
     g->nbrscan_edges();
     randomize_weights(g->get_edge_weights(), ne);
 
-    GraphElem* edges = new GraphElem[ne];
-    GraphWeight* weights = new GraphWeight[ne];
+    //GraphElem* edges = new GraphElem[ne];
+    //GraphWeight* weights = new GraphWeight[ne];
 
     GraphElem* edges_g = g->get_edges();
     GraphWeight* weights_g = g->get_edge_weights();
     GraphElem* indices = g->get_index_ranges();
 
-    std::copy(edges_g, edges_g+ne, edges);
-    std::copy(weights_g, weights_g+ne, weights);
+    //std::copy(edges_g, edges_g+ne, edges);
+    //std::copy(weights_g, weights_g+ne, weights);
 
     GraphGPU* g_gpu = new GraphGPU(g);
 
@@ -188,12 +189,11 @@ int main(int argc, char **argv)
 
     g_gpu->set_communtiy_ids(commIds);
     //g_gpu->singleton_partition();
-
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    cudaEventRecord(start, 0);
+    /*cudaEventRecord(start, 0);
 
     g_gpu->sort_edges_by_community_ids();
 
@@ -201,27 +201,19 @@ int main(int argc, char **argv)
     cudaEventSynchronize(stop);
     float time;
     cudaEventElapsedTime(&time, start, stop);
-    std::cout << "Sorting time on GPU is " << time*1E-03 << " s" << std::endl;
+    std::cout << "sorting time on GPU is " << time*1E-03 << " s" << std::endl;
+    */
 
-    double t0 = omp_get_wtime();
-    sort_edges_by_commids(weights, edges, indices, commIds, nv);
-    double t1 = omp_get_wtime();
+    cudaEventRecord(start, 0);
 
-    std::cout << "Sorting time on CPU is " << t1-t0 << " s" << std::endl;
+    g_gpu->louvain_update();
 
-    #ifdef CHECK
-    double err = 0;
-    #pragma omp parallel for reduction(+:err)
-    for(GraphElem i = 0; i < ne; ++i)
-        err += std::pow(edges_g[i]-edges[i],2);
-    std::cout << "Error of the sorting edges: " << err << std::endl;
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    float time;
+    cudaEventElapsedTime(&time, start, stop);
+    std::cout << "sorting+Louvain update time on GPU is " << time*1E-03 << " s" << std::endl;
 
-    err = 0.;
-    #pragma omp parallel for reduction(+:err)
-    for(GraphElem i = 0; i < ne; ++i)
-        err += std::pow(weights_g[i]-weights[i],2);
-    std::cout << "Error of the sorting weights: " << err << std::endl;
-    #endif
     /*t0 = omp_get_wtime();
     sort_edges_by_commids(edges, indices, commIds, nv);
     t1 = omp_get_wtime();
@@ -240,8 +232,8 @@ int main(int argc, char **argv)
 
 
     delete [] commIds;
-    delete [] edges;
-    delete [] weights;
+    //delete [] edges;
+    //delete [] weights;
 
     delete g;
     delete g_gpu;

@@ -61,6 +61,7 @@
 #include "types.hpp"
 #include "graph.hpp"
 #include "graph_gpu.hpp"
+
 #include <random>
 #ifdef USE_32_BIT_GRAPH
 typedef std::mt19937 Mt19937;
@@ -102,8 +103,8 @@ static void set_random_commIds(GraphElem* commIds, const GraphElem& nv)
     std::uniform_int_distribution<GraphElem> distribution(0,nv/16+1);
 
     for(GraphElem i = 0; i < nv; ++i)
-        //commIds[i] = distribution(rng);
-        commIds[i] = i;
+        commIds[i] = distribution(rng);
+        //commIds[i] = i;
 }
 typedef struct EdgeKey
 {
@@ -188,40 +189,20 @@ int main(int argc, char **argv)
 
     g_gpu->set_communtiy_ids(commIds);
     //g_gpu->singleton_partition();
-
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
     cudaEventRecord(start, 0);
 
-    g_gpu->sort_edges_by_community_ids();
+    g_gpu->compute_modularity();
 
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     float time;
     cudaEventElapsedTime(&time, start, stop);
-    std::cout << "Sorting time on GPU is " << time*1E-03 << " s" << std::endl;
+    std::cout << "sorting+modularity computation time on GPU is " << time*1E-03 << " s" << std::endl;
 
-    double t0 = omp_get_wtime();
-    sort_edges_by_commids(weights, edges, indices, commIds, nv);
-    double t1 = omp_get_wtime();
-
-    std::cout << "Sorting time on CPU is " << t1-t0 << " s" << std::endl;
-
-    #ifdef CHECK
-    double err = 0;
-    #pragma omp parallel for reduction(+:err)
-    for(GraphElem i = 0; i < ne; ++i)
-        err += std::pow(edges_g[i]-edges[i],2);
-    std::cout << "Error of the sorting edges: " << err << std::endl;
-
-    err = 0.;
-    #pragma omp parallel for reduction(+:err)
-    for(GraphElem i = 0; i < ne; ++i)
-        err += std::pow(weights_g[i]-weights[i],2);
-    std::cout << "Error of the sorting weights: " << err << std::endl;
-    #endif
     /*t0 = omp_get_wtime();
     sort_edges_by_commids(edges, indices, commIds, nv);
     t1 = omp_get_wtime();

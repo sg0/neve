@@ -91,7 +91,16 @@ CudaCall(cudaDeviceSynchronize())
 #define WARPSIZE	32
 #define BLOCKDIM01	64
 #define BLOCKDIM02	128
+#define BLOCKDIM03      512
+#define MAX_BLOCKDIM	1024
 #define MAX_GRIDDIM	65535
+
+#ifdef USE_32BIT_GRAPH
+#define MAX_FLOAT	1.0E+38
+#else
+#define MAX_FLOAT       1.0E+308
+#endif
+//#define MAX_GRIDDIM	4096
 //#define MAX_GRIDDIM	2147483647
 #ifdef USE_32BIT_GRAPH
 struct less_int2

@@ -229,7 +229,6 @@ int main(int argc, char **argv)
                 1.0E-06 * bytes[j]/mintime[j], avgtime[j], mintime[j],
                 maxtime[j]);
     }
-
     //perform the gpu part
     float times_cuda[3][NTIMES]; 
     double avgtime_cuda[3] = {0}, maxtime_cuda[3] = {0}, mintime_cuda[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
