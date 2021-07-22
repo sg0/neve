@@ -57,8 +57,8 @@
 #include <caliper/cali-manager.h>
 #endif
 
-#include "graph.hpp"
 #include "types.hpp"
+#include "graph.hpp"
 // A lot of print diagnostics is lifted from
 // the STREAM benchmark.
 

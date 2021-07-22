@@ -20,7 +20,7 @@ CXXFLAGS = -g -I. $(OPTFLAGS)
 #CXXFLAGS_THREADS = -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
 CXXFLAGS_THREADS = -fopenmp
 ifeq ($(ENABLE_OMP_OFFLOAD),1)
-CXXFLAGS_THREADS += -fopenmp-targets=nvptx64 -Xopenmp-target=nvptx64 -march=sm_${SM} --gcc-toolchain=/share/apps/gcc/9.1.0 -DUSE_OMP_ACCELERATOR
+CXXFLAGS_THREADS += -fopenmp-targets=nvptx64 -Xopenmp-target=nvptx64 -march=sm_${SM} -DUSE_OMP_ACCELERATOR
 endif
 CXXFLAGS_THREADS += -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-I/usr/lib/gcc/x86_64-redhat-linux/4.8.5/include/
 #-Xptxas -O3
