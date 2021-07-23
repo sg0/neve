@@ -37,13 +37,17 @@ const MPI_Datatype MPI_WEIGHT_TYPE = MPI_DOUBLE;
 #endif
 #endif
 
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp declare target
+#endif
 #ifdef EDGE_AS_VERTEX_PAIR
 struct Edge
 {   
     GraphElem head_, tail_;
     GraphWeight weight_;
     
-    Edge(): head_(-1), tail_(-1), weight_(0.0) {}
+    Edge(): head_(-1), tail_(-1), weight_(0.0) 
+    {}
 };
 #else
 struct Edge
@@ -55,4 +59,6 @@ struct Edge
 };
 #endif
 #endif
-
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp end declare target
+#endif
