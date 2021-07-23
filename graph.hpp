@@ -257,7 +257,6 @@ class Graph
 	}
 	inline void nbrscan_edges()
 	{
-		GraphElem e0, e1;
 #ifdef ENABLE_PREFETCH
 #ifdef __INTEL_COMPILER
 #pragma noprefetch edge_weights_
