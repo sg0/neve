@@ -118,10 +118,6 @@ class Graph
             #else 
             edge_indices_   = new GraphElem[nv_+1];
             vertex_degree_  = new GraphWeight[nv_];
-            #ifdef USE_OMP_ACCELERATOR
-            #pragma omp target enter data map(alloc:edge_indices_[0:nv_+1])
-            #pragma omp target enter data map(alloc:vertex_degree_[0:nv_])
-            #endif
             #endif
         }
 
@@ -140,13 +136,6 @@ class Graph
             vertex_degree_  = new GraphWeight[nv_];
             edge_weights_   = new GraphWeight[ne_];
             edges_ = new GraphElem[ne_];
-            #ifdef USE_OMP_ACCELERATOR
-            #pragma omp target enter data map(alloc:edge_indices_[0:nv_+1])
-            #pragma omp target enter data map(alloc:edge_list_[0:ne_])
-            #pragma omp target enter data map(alloc:vertex_degree_[0:nv_])
-            #pragma omp target enter data map(alloc:edge_weights_[0:ne_])
-            #pragma omp target enter data map(alloc:edges_[0:ne_])
-            #endif
             #endif
         }
 
@@ -159,13 +148,6 @@ class Graph
             cudaFreeHost(edge_weights_);
             cudaFreeHost(edges_);
             #else
-            #ifdef USE_OMP_ACCELERATOR
-            #pragma omp target exit data map(delete:edge_indices_[0:nv_+1])
-            #pragma omp target exit data map(delete:edge_list_[0:ne_])
-            #pragma omp target exit data map(delete:vertex_degree_[0:nv_])
-            #pragma omp target exit data map(delete:edge_weights_[0:ne_])
-            #pragma omp target exit data map(delete:edges_[0:ne_])
-            #endif
             delete [] edge_indices_;
             delete [] edge_list_;
             delete [] edge_weights_;
@@ -203,13 +185,8 @@ class Graph
             edge_list_      = new Edge[ne_];
             edge_weights_   = new GraphWeight[ne_];
             edges_ = new GraphElem[ne_];
-            #ifdef USE_OMP_ACCELERATOR
-            #pragma omp target enter data map(alloc:edge_list_[0:ne_])
-            #pragma omp target enter data map(alloc:edge_weights_[0:ne_])
-            #pragma omp target enter data map(alloc:edges_[0:ne_])
             #endif
-            #endif
-        }
+	}
 
 
         GraphElem get_nv() const { return nv_; }
@@ -275,7 +252,8 @@ class Graph
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
 #pragma omp target teams distribute parallel for \
-		map(from:edges_) map(to:edge_indices_, edge_list_)
+map(to:edge_indices_[nv_+1], edge_list_[ne_]) \
+map(from:edges_[ne_])
 #else
 #pragma omp parallel for
 #endif
@@ -418,7 +396,8 @@ class Graph
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
 #pragma omp target teams distribute parallel for \
-map(from: edge_weights_) map(to: edge_indices_, edge_list_)
+map(to:edge_indices_[nv_+1], edge_list_[ne_]) \
+map(from:edge_weights_[ne_])
 #else
 #pragma omp parallel for
 #endif
@@ -479,7 +458,8 @@ map(from: edge_weights_) map(to: edge_indices_, edge_list_)
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
 #pragma omp target teams distribute parallel for \
-map(from:vertex_degree_) map(to:edge_indices_, edge_list_)
+map(to:edge_indices_[nv_+1], edge_list_[ne_]) \
+map(tofrom:vertex_degree_[nv_])
 #else
 #pragma omp parallel for
 #endif
@@ -540,7 +520,8 @@ map(from:vertex_degree_) map(to:edge_indices_, edge_list_)
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
 #pragma omp target teams distribute parallel for \
-map(from:vertex_degree_) map(to:edge_indices_, edge_list_)
+map(to:edge_indices_[nv_+1], edge_list_[ne_]) \
+map(from:vertex_degree_[nv_])
 #else
 #pragma omp parallel for
 #endif

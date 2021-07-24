@@ -114,12 +114,16 @@ int main(int argc, char **argv)
 #ifdef LLNL_CALIPER_ENABLE
     cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
 #endif
-
     // nbrscan: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
     // nbrsum : 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
     // nbrmax : 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + nv*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
     const GraphElem nv = g->get_nv();
     const GraphElem ne = g->get_ne();
+
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp target enter data map(to:g->edge_indices_[0:nv+1], g->edge_list_[0:ne])
+#endif
+
 #ifdef EDGE_AS_VERTEX_PAIR
     const std::size_t count_nbrscan = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) 
         + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight)); 
