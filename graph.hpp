@@ -155,7 +155,17 @@ class Graph
             delete [] edges_;
             #endif
         }
-         
+        
+        #ifdef USE_OMP_ACCELERATOR                  
+        Graph(const Graph &g) 
+        {
+            nv_ = g.nv_;
+            ne_ = g.ne_;
+            memcpy(edge_list_, g.edge_list_, sizeof(Edge)*ne_); 
+            memcpy(edge_indices_, g.edge_indices_, sizeof(GraphElem)*(nv_+1)); 
+        }
+        #endif
+
         void set_edge_index(GraphElem const vertex, GraphElem const e0)
         {
 #if defined(DEBUG_BUILD)
@@ -252,8 +262,8 @@ class Graph
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
 #pragma omp target teams distribute parallel for \
-map(to:edge_indices_[nv_+1], edge_list_[ne_]) \
-map(from:edges_[ne_])
+map(to:edge_indices_[0:nv_+1], edge_list_[0:ne_]) \
+map(from:edges_[0:ne_])
 #else
 #pragma omp parallel for
 #endif
@@ -396,8 +406,8 @@ map(from:edges_[ne_])
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
 #pragma omp target teams distribute parallel for \
-map(to:edge_indices_[nv_+1], edge_list_[ne_]) \
-map(from:edge_weights_[ne_])
+map(to:edge_indices_[0:nv_+1], edge_list_[0:ne_]) \
+map(from:edge_weights_[0:ne_])
 #else
 #pragma omp parallel for
 #endif
@@ -458,8 +468,8 @@ map(from:edge_weights_[ne_])
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
 #pragma omp target teams distribute parallel for \
-map(to:edge_indices_[nv_+1], edge_list_[ne_]) \
-map(tofrom:vertex_degree_[nv_])
+map(to:edge_indices_[0:nv_+1], edge_list_[0:ne_]) \
+map(tofrom:vertex_degree_[0:nv_])
 #else
 #pragma omp parallel for
 #endif
@@ -520,8 +530,8 @@ map(tofrom:vertex_degree_[nv_])
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
 #pragma omp target teams distribute parallel for \
-map(to:edge_indices_[nv_+1], edge_list_[ne_]) \
-map(from:vertex_degree_[nv_])
+map(to:edge_indices_[0:nv_+1], edge_list_[0:ne_]) \
+map(from:vertex_degree_[0:nv_])
 #else
 #pragma omp parallel for
 #endif
