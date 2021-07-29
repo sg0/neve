@@ -1,8 +1,8 @@
 ENABLE_OMP_OFFLOAD=1
 ENABLE_PINNED=1
-#CXX = g++
+CXX = g++
 ifeq ($(ENABLE_OMP_OFFLOAD),1)
-#CXX = clang++
+CXX = clang++
 endif
 MPICXX = mpicxx
 NVCC = nvcc
