@@ -184,6 +184,56 @@ int main(int argc, char **argv)
     double times[3][NTIMES]; 
     double avgtime[3] = {0}, maxtime[3] = {0}, mintime[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
 
+    std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
+    double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
+
+    printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
+
+#ifdef USE_OMP_ACCELERATOR
+    times[0][0] = omp_get_wtime();
+#pragma omp target enter data \
+    map(to:g, g->edge_indices_[0:nv+1], g->edge_list_[0:ne]) 
+    {
+      for (int k = 0; k < NTIMES; k++)
+      {
+        g->nbrscan();
+      }
+    }
+#pragma omp target exit data \
+    map(from:g->edges_[0:ne])
+    times[0][0] = omp_get_wtime() - times[0][0];
+    times[1][0] = omp_get_wtime();
+#pragma omp target enter data \
+    map(to:g, g->edge_indices_[0:nv+1], g->edge_list_[0:ne], g->vertex_degree_[0:nv])
+    {
+      for (int k = 0; k < NTIMES; k++)
+      {
+        g->nbrsum();
+      }
+    }
+#pragma omp target exit data \
+    map(from:g->vertex_degree_[0:nv])
+    times[1][0] = omp_get_wtime() - times[1][0];
+    times[2][0] = omp_get_wtime();
+#pragma omp target enter data \
+    map(to:g, g->edge_indices_[0:nv+1], g->edge_list_[0:ne])
+    {
+      for (int k = 0; k < NTIMES; k++)
+      {
+        g->nbrmax();
+      }
+    }
+#pragma omp target exit data \
+    map(from:g->vertex_degree_[0:nv])
+    times[2][0] = omp_get_wtime() - times[2][0];
+    for (int j = 0; j < 3; j++) 
+    {
+        times[j][0] = times[j][0]/(double)(NTIMES);
+        std::printf("%s%12.1f  %12.6f  %11.6f  %11.6f\n", label[j].c_str(),
+                1.0E-06 * bytes[j]/times[j][0], times[j][0], times[j][0],
+                times[j][0]);
+    }
+#else
     for (int k = 0; k < NTIMES; k++)
     {
         times[0][k] = omp_get_wtime();
@@ -207,10 +257,6 @@ int main(int argc, char **argv)
         }
     }
 
-    std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
-    double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
-
-    printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
     for (int j = 0; j < 3; j++) 
     {
         avgtime[j] = avgtime[j]/(double)(NTIMES-1);
@@ -218,6 +264,7 @@ int main(int argc, char **argv)
                 1.0E-06 * bytes[j]/mintime[j], avgtime[j], mintime[j],
                 maxtime[j]);
     }
+#endif
 #endif
     
     return 0;

@@ -135,7 +135,7 @@ class Graph
             edge_list_      = new Edge[ne_];
             vertex_degree_  = new GraphWeight[nv_];
             edge_weights_   = new GraphWeight[ne_];
-            edges_ = new GraphElem[ne_];
+            edges_          = new GraphElem[ne_];
             #endif
         }
 
@@ -162,7 +162,7 @@ class Graph
             nv_ = g.nv_;
             ne_ = g.ne_;
             memcpy(edge_list_, g.edge_list_, sizeof(Edge)*ne_); 
-            memcpy(edge_indices_, g.edge_indices_, sizeof(GraphElem)*(nv_+1)); 
+            memcpy(edge_indices_, g.edge_indices_, sizeof(__GraphElem__)*(nv_+1)); 
         }
         #endif
 
@@ -194,10 +194,9 @@ class Graph
             #else
             edge_list_      = new Edge[ne_];
             edge_weights_   = new GraphWeight[ne_];
-            edges_ = new GraphElem[ne_];
+            edges_          = new GraphElem[ne_];
             #endif
-	}
-
+        }
 
         GraphElem get_nv() const { return nv_; }
         GraphElem get_ne() const { return ne_; }
@@ -261,9 +260,7 @@ class Graph
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-#pragma omp target teams distribute parallel for \
-map(to:edge_indices_[0:nv_+1], edge_list_[0:ne_]) \
-map(from:edges_[0:ne_])
+#pragma omp target teams distribute parallel for 
 #else
 #pragma omp parallel for
 #endif
@@ -467,9 +464,7 @@ map(from:edge_weights_[0:ne_])
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-#pragma omp target teams distribute parallel for \
-map(to:edge_indices_[0:nv_+1], edge_list_[0:ne_]) \
-map(tofrom:vertex_degree_[0:nv_])
+#pragma omp target teams distribute parallel for 
 #else
 #pragma omp parallel for
 #endif
@@ -529,9 +524,7 @@ map(tofrom:vertex_degree_[0:nv_])
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-#pragma omp target teams distribute parallel for \
-map(to:edge_indices_[0:nv_+1], edge_list_[0:ne_]) \
-map(from:vertex_degree_[0:nv_])
+#pragma omp target teams distribute parallel for 
 #else
 #pragma omp parallel for
 #endif
