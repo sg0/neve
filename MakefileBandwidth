@@ -21,7 +21,7 @@ else
 	CFLAGS  += DUSE_64BIT
 endif
 
-EXE:= run
+EXE:= test_bandwidth
 
 all: ${EXE}
 
