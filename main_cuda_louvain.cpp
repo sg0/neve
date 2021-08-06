@@ -212,7 +212,7 @@ int main(int argc, char **argv)
     cudaEventSynchronize(stop);
     float time;
     cudaEventElapsedTime(&time, start, stop);
-    std::cout << "sorting+Louvain update time on GPU is " << time*1E-03 << " s" << std::endl;
+    std::cout << "Sorting+Louvain update time on GPU is " << time*1E-03 << " s" << std::endl;
 
     /*t0 = omp_get_wtime();
     sort_edges_by_commids(edges, indices, commIds, nv);

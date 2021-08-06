@@ -39,7 +39,10 @@ maxOrder_(0), nv_per_batch_(0), ne_per_batch_(0)//, mass_(0)
     CudaMemset(commWeights_, 0, sizeof(GraphWeight)*nv_);
     maxOrder_ = max_order();
 
-    //std::cout << "max order is " << maxOrder_ << std::endl;
+    #ifdef CHECK
+    std::cout << "Max order is " << maxOrder_ << std::endl;
+    #endif
+    std::cout << "cehck " << edgesHost_[3612134267] << std::endl;
 
     unsigned unit_size = (sizeof(GraphElem) > sizeof(GraphWeight)) ? sizeof(GraphElem) : sizeof(GraphWeight); 
     nv_per_batch_ = determine_optimal_vertices_per_batch(nv_, ne_, maxOrder_, unit_size); 
@@ -344,8 +347,8 @@ void GraphGPU::sort_edges_by_community_ids()
 
 void GraphGPU::singleton_partition()
 {
-    singleton_partition_cuda(commIds_, commWeights_, vertexWeights_, nv_);
-    copy_vector_cuda(newCommIds_, commIds_, nv_);
+    singleton_partition_cuda(commIds_, newCommIds_, commWeights_, vertexWeights_, nv_);
+    //copy_vector_cuda(newCommIds_, commIds_, nv_);
 }
 
 GraphElem GraphGPU::max_order()
@@ -456,12 +459,12 @@ void GraphGPU::max_vertex_weights()
 //#if 0
 void GraphGPU::louvain_update()
 {
-    cudaStream_t cuStreams[2];
-    for(int i = 0; i < 2; ++i)
+    cudaStream_t cuStreams[3];
+    for(int i = 0; i < 3; ++i)
         cudaStreamCreate(&cuStreams[i]);
 
     //thrust::device_ptr<GraphElem>   edges_ptr = thrust::device_pointer_cast(edges_);
-    thrust::device_ptr<GraphElem> orders_ptr = thrust::device_pointer_cast((GraphElem*)edgeWeights_);
+    thrust::device_ptr<GraphElem> orders_ptr = thrust::device_pointer_cast(indexOrders_);
     //thrust::device_ptr<GraphWeight> weights_ptr = thrust::device_pointer_cast(edgeWeights_);
     thrust::device_ptr<GraphElem2> keys_ptr = thrust::device_pointer_cast(commIdKeys_);
     less_int2 comp;
@@ -482,7 +485,7 @@ void GraphGPU::louvain_update()
         GraphElem e0 = indicesHost_[v0];
         GraphElem e1 = indicesHost_[v1];
         GraphElem ne = e1-e0;
-
+/*
         fill_index_orders_cuda((GraphElem*)edgeWeights_, indices_, v0, v1, e0, e1, cuStreams[1]);
 
         CudaMemcpyAsyncHtoD(edges_, edgesHost_+e0, sizeof(GraphElem)*ne, cuStreams[0]);
@@ -508,6 +511,26 @@ void GraphGPU::louvain_update()
         reorder_edges_by_keys_cuda((GraphElem*)edges_, (GraphElem*)commIdKeys_, indices_, ((GraphElem*)commIdKeys_)+ne, v0, v1,  e0, e1);
         reorder_weights_by_keys_cuda((GraphWeight*)edgeWeights_, (GraphElem*)commIdKeys_, indices_, 
         (GraphWeight*)(((GraphElem*)commIdKeys_)+ne), v0, v1,  e0, e1);
+
+        build_local_commid_offsets_cuda(((GraphElem*)commIdKeys_), ((GraphElem*)commIdKeys_)+ne,
+        (GraphElem*)edges_, indices_, commIds_, v0, v1, e0, e1);*/
+
+        fill_index_orders_cuda(indexOrders_, indices_, v0, v1, e0, e1, cuStreams[1]);
+
+        CudaMemcpyAsyncHtoD(edges_, edgesHost_+e0, sizeof(GraphElem)*ne, cuStreams[0]);
+        CudaMemcpyAsyncHtoD(edgeWeights_, edgeWeightsHost_+e0, sizeof(GraphWeight)*ne, cuStreams[2]);
+
+        fill_edges_community_ids_cuda(commIdKeys_, (GraphElem*)edges_, indices_, commIds_, v0, v1, e0, e1, cuStreams[0]);
+
+        thrust::sort_by_key(keys_ptr, keys_ptr+ne, orders_ptr, comp);
+
+        //move_index_orders_cuda((GraphElem*)commIdKeys_, (GraphElem*)edgeWeights_, v0, v1, e0, e1);
+        //cudaDeviceSynchronize();
+
+        reorder_edges_by_keys_cuda((GraphElem*)edges_, indexOrders_, indices_, (GraphElem*)commIdKeys_, v0, v1,  e0, e1, cuStreams[1]);
+
+        reorder_weights_by_keys_cuda((GraphWeight*)edgeWeights_, indexOrders_, indices_,
+        (GraphWeight*)(((GraphElem*)commIdKeys_)+ne), v0, v1,  e0, e1, cuStreams[0]);
 
         build_local_commid_offsets_cuda(((GraphElem*)commIdKeys_), ((GraphElem*)commIdKeys_)+ne,
         (GraphElem*)edges_, indices_, commIds_, v0, v1, e0, e1);
@@ -554,7 +577,7 @@ void GraphGPU::louvain_update()
         CudaMemcpyAsyncDtoH(edgeWeightsHost_+e0, edgeWeights_, sizeof(GraphWeight)*ne, 0);
         #endif
      }
-     for(int i = 0; i < 2; ++i)
+     for(int i = 0; i < 3; ++i)
          cudaStreamDestroy(cuStreams[i]);
 }    
 
@@ -566,19 +589,19 @@ void GraphGPU::compute_mass()
 
 GraphWeight GraphGPU::compute_modularity()
 {
-    cudaStream_t cuStreams[2];
-    for(int i = 0; i < 2; ++i)
+    cudaStream_t cuStreams[3];
+    for(int i = 0; i < 3; ++i)
         cudaStreamCreate(&cuStreams[i]);
 
     //thrust::device_ptr<GraphElem>   edges_ptr = thrust::device_pointer_cast(edges_);
-    thrust::device_ptr<GraphElem> orders_ptr = thrust::device_pointer_cast((GraphElem*)edgeWeights_);
+    thrust::device_ptr<GraphElem> orders_ptr = thrust::device_pointer_cast(indexOrders_);
     //thrust::device_ptr<GraphWeight> weights_ptr = thrust::device_pointer_cast(edgeWeights_);
     thrust::device_ptr<GraphElem2> keys_ptr = thrust::device_pointer_cast(commIdKeys_);
     less_int2 comp;
  
     GraphWeight* mod;
-    CudaMalloc(mod, sizeof(GraphWeight)*MAX_GRIDDIM*BLOCKDIM01/8);
-    CudaMemset(mod, 0, sizeof(GraphWeight)*MAX_GRIDDIM*BLOCKDIM01/8);
+    CudaMalloc(mod, sizeof(GraphWeight)*MAX_GRIDDIM*BLOCKDIM02/WARPSIZE);
+    CudaMemset(mod, 0, sizeof(GraphWeight)*MAX_GRIDDIM*BLOCKDIM02/WARPSIZE);
 
     for(GraphElem b = 0; b < vertex_partition_.size()-1; ++b)
     {
@@ -589,6 +612,7 @@ GraphWeight GraphGPU::compute_modularity()
         GraphElem e0 = indicesHost_[v0];
         GraphElem e1 = indicesHost_[v1];
         GraphElem ne = e1-e0;
+        /*
         fill_index_orders_cuda((GraphElem*)edgeWeights_, indices_, v0, v1, e0, e1, cuStreams[1]);
 
         CudaMemcpyAsyncHtoD(edges_, edgesHost_+e0, sizeof(GraphElem)*ne, cuStreams[0]);
@@ -617,21 +641,43 @@ GraphWeight GraphGPU::compute_modularity()
 
         build_local_commid_offsets_cuda(((GraphElem*)commIdKeys_), ((GraphElem*)commIdKeys_)+ne,
         (GraphElem*)edges_, indices_, commIds_, v0, v1, e0, e1);
+        */
+        fill_index_orders_cuda(indexOrders_, indices_, v0, v1, e0, e1, cuStreams[1]);
+
+        CudaMemcpyAsyncHtoD(edges_, edgesHost_+e0, sizeof(GraphElem)*ne, cuStreams[0]);
+        CudaMemcpyAsyncHtoD(edgeWeights_, edgeWeightsHost_+e0, sizeof(GraphWeight)*ne, cuStreams[2]);
+
+        fill_edges_community_ids_cuda(commIdKeys_, (GraphElem*)edges_, indices_, commIds_, v0, v1, e0, e1, cuStreams[0]);
+
+        thrust::sort_by_key(keys_ptr, keys_ptr+ne, orders_ptr, comp);
+
+        //move_index_orders_cuda((GraphElem*)commIdKeys_, (GraphElem*)edgeWeights_, v0, v1, e0, e1);
+        //cudaDeviceSynchronize();
+
+        reorder_edges_by_keys_cuda((GraphElem*)edges_, indexOrders_, indices_, (GraphElem*)commIdKeys_, v0, v1,  e0, e1, cuStreams[1]);
+
+        reorder_weights_by_keys_cuda((GraphWeight*)edgeWeights_, indexOrders_, indices_,
+        (GraphWeight*)(((GraphElem*)commIdKeys_)+ne), v0, v1,  e0, e1, cuStreams[0]);
+
+        build_local_commid_offsets_cuda(((GraphElem*)commIdKeys_), ((GraphElem*)commIdKeys_)+ne,
+        (GraphElem*)edges_, indices_, commIds_, v0, v1, e0, e1);
  
-        CudaLaunch((compute_modularity_reduce_cuda(mod, (GraphElem*)edges_, (GraphWeight*)edgeWeights_, indices_, 
-        commIds_, commWeights_, ((GraphElem*)commIdKeys_), ((GraphElem*)commIdKeys_)+ne, mass_, v0, v1, e0, e1)));
+        compute_modularity_reduce_cuda<BLOCKDIM02, WARPSIZE>(mod, (GraphElem*)edges_, (GraphWeight*)edgeWeights_, indices_, 
+        commIds_, commWeights_, ((GraphElem*)commIdKeys_), ((GraphElem*)commIdKeys_)+ne, mass_, v0, v1, e0, e1);
     }
 
-    GraphWeight q = compute_modularity_cuda(mod, MAX_GRIDDIM*BLOCKDIM01/8);
+    GraphWeight q = compute_modularity_cuda(mod, MAX_GRIDDIM*BLOCKDIM02/WARPSIZE);
 
     CudaFree(mod);
-    for(int i = 0; i < 2; ++i)
+    for(int i = 0; i < 3; ++i)
          cudaStreamDestroy(cuStreams[i]);
 
     #ifdef CHECK
     CudaDeviceSynchronize();
     GraphWeight q0 = check_modularity(edgesHost_, edgeWeightsHost_, indicesHost_, commIds_, commWeights_, mass_, nv_); 
     std::cout << "Modularities on GPU and CPU are " << q << " and " << q0 << std::endl;
+    #else
+    std::cout << "Modularity on GPU is " << q << std::endl;
     #endif
     return q;
 }

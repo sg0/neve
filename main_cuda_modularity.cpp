@@ -103,8 +103,8 @@ static void set_random_commIds(GraphElem* commIds, const GraphElem& nv)
     std::uniform_int_distribution<GraphElem> distribution(0,nv/16+1);
 
     for(GraphElem i = 0; i < nv; ++i)
-        commIds[i] = distribution(rng);
-        //commIds[i] = i;
+        //commIds[i] = distribution(rng);
+        commIds[i] = i;
 }
 typedef struct EdgeKey
 {
