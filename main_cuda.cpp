@@ -58,7 +58,6 @@
 #include <caliper/cali.h>
 #include <caliper/cali-manager.h>
 #endif
-
 unsigned seed;
 #include "types.hpp"
 #include "graph.hpp"
