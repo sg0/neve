@@ -43,9 +43,13 @@ struct Edge
     GraphElem head_, tail_;
     GraphWeight weight_;
     
-    Edge(): head_(-1), tail_(-1), weight_(0.0) {}
+    Edge(): head_(-1), tail_(-1), weight_(0.0) 
+    {}
 };
 #else
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp declare target
+#endif
 struct Edge
 {   
     GraphElem tail_;
@@ -53,6 +57,8 @@ struct Edge
     
     Edge(): tail_(-1), weight_(0.0) {}
 };
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp end declare target
 #endif
 #endif
-
+#endif

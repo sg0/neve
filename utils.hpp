@@ -160,7 +160,7 @@ inline GraphElem reseeder(unsigned initseed)
 template<typename T, typename G = std::default_random_engine>
 T genRandom(T lo, T hi)
 {
-    thread_local static G gen(seed);
+    thread_local static G gen(std::random_device{}());
     using Dist = typename std::conditional
         <
         std::is_integral<T>::value

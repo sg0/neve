@@ -61,14 +61,7 @@
 #include "utils.hpp"
 #include <unistd.h>
 
-//unsigned seed;
-
-#ifdef USE_OMP_ACCELERATOR
-#pragma omp declare target
-#endif
-#ifdef USE_OMP_ACCELERATOR
-#pragma omp end declare target
-#endif
+unsigned seed;
 
 #ifdef USE_CUDA
 #include "graph.cuh"
@@ -106,7 +99,6 @@ struct EdgeTuple
     {}
 };
 
-
 #if defined(USE_SHARED_MEMORY)
 class Graph
 {
@@ -143,7 +135,7 @@ class Graph
             edge_list_      = new Edge[ne_];
             vertex_degree_  = new GraphWeight[nv_];
             edge_weights_   = new GraphWeight[ne_];
-            edges_ = new GraphElem[ne_];
+            edges_          = new GraphElem[ne_];
             #endif
         }
 
@@ -163,7 +155,17 @@ class Graph
             delete [] edges_;
             #endif
         }
-         
+        
+        #ifdef USE_OMP_ACCELERATOR                  
+        Graph(const Graph &g) 
+        {
+            nv_ = g.nv_;
+            ne_ = g.ne_;
+            memcpy(edge_list_, g.edge_list_, sizeof(Edge)*ne_); 
+            memcpy(edge_indices_, g.edge_indices_, sizeof(__GraphElem__)*(nv_+1)); 
+        }
+        #endif
+
         void set_edge_index(GraphElem const vertex, GraphElem const e0)
         {
 #if defined(DEBUG_BUILD)
@@ -192,10 +194,9 @@ class Graph
             #else
             edge_list_      = new Edge[ne_];
             edge_weights_   = new GraphWeight[ne_];
-            edges_ = new GraphElem[ne_];
+            edges_          = new GraphElem[ne_];
             #endif
         }
-
 
         GraphElem get_nv() const { return nv_; }
         GraphElem get_ne() const { return ne_; }
@@ -239,10 +240,9 @@ class Graph
                 std::cout << "Graph size is {" << nv_ << ", " << ne_ << 
                     "}, which will overwhelm STDOUT." << std::endl;
             }
-        }
-inline void nbrscan_edges()
-{
-    GraphElem e0, e1;
+	}
+	inline void nbrscan_edges()
+	{
 #ifdef ENABLE_PREFETCH
 #ifdef __INTEL_COMPILER
 #pragma noprefetch edge_weights_
@@ -260,39 +260,26 @@ inline void nbrscan_edges()
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-    Edge* edge_list_ptr = edge_list_;
-    GraphWeight* edges_ptr = edges_;
-    GraphElem* edge_indices_ptr = edge_indices_;
-#pragma omp target parallel for \
-map(from:edge_weights_ptr[0:ne_]) \
-map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
+#pragma omp target teams distribute parallel for 
 #else
 #pragma omp parallel for
 #endif
-    for (GraphElem i = 0; i < nv_; i++)
-    {
+		for (GraphElem i = 0; i < nv_; i++)
+		{
 #ifdef USE_OMP_TASKS_FOR
-        #pragma omp task
-        {
+#pragma omp task
+			{
 #endif
-#if defined USE_OMP_ACCELERATOR
-            for (GraphElem e = edge_indices_ptr[i]; e < edge_indices_ptr[i+1]; e++)
-            {
-                Edge const& edge = edge_list_ptr[e];
-                edges_ptr[e] = edge.tail_;
-            }
-#else
-            for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
-            {
-                Edge const& edge = edge_list_[e];
-                edges_[e] = edge.tail_;
-            }
-#endif
+				for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
+				{
+					Edge const& edge = edge_list_[e];
+					edges_[e] = edge.tail_;
+				}
 #ifdef USE_OMP_TASKS_FOR
-        }
+			}
 #endif
-    }
-}
+		}
+	}
 #if 0
     inline void nbr_max_order_cuda()
     {
@@ -398,7 +385,6 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 	    CALI_MARK_BEGIN("nbrscan");
 	    CALI_MARK_BEGIN("parallel");
 #endif
-            GraphElem e0, e1;
 #ifdef ENABLE_PREFETCH
 #ifdef __INTEL_COMPILER
 #pragma noprefetch edge_weights_
@@ -416,12 +402,9 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-           Edge* edge_list_ptr = edge_list_;
-           GraphWeight* edge_weights_ptr = edge_weights_;
-           GraphElem* edge_indices_ptr = edge_indices_;
 #pragma omp target teams distribute parallel for \
-map(from:edge_weights_ptr[0:ne_]) \
-map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
+map(to:edge_indices_[0:nv_+1], edge_list_[0:ne_]) \
+map(from:edge_weights_[0:ne_])
 #else
 #pragma omp parallel for
 #endif
@@ -431,19 +414,11 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
                 #pragma omp task
 		    {
 #endif
-#if defined USE_OMP_ACCELERATOR
-                for (GraphElem e = edge_indices_ptr[i]; e < edge_indices_ptr[i+1]; e++)
-                {
-                    Edge const& edge = edge_list_ptr[e];
-                    edge_weights_ptr[e] = edge.weight_;
-                }
-#else
-                for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
-                {
-                    Edge const& edge = edge_list_[e];
-                    edge_weights_[e] = edge.weight_;
-                }
-#endif
+			    for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
+			    {
+				    Edge const& edge = edge_list_[e];
+				    edge_weights_[e] = edge.weight_;
+			    }
 #ifdef USE_OMP_TASKS_FOR
 		    }
 #endif
@@ -472,7 +447,6 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 	    CALI_MARK_BEGIN("nbrsum");
 	    CALI_MARK_BEGIN("parallel");
 #endif
-            GraphElem e0, e1;
 #ifdef ENABLE_PREFETCH
 #ifdef __INTEL_COMPILER
 #pragma noprefetch vertex_degree_
@@ -490,16 +464,7 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-//#pragma omp target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
-map(tofrom:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
-//#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:vertex_degree_[0:nv_])
-//#pragma omp teams distribute parallel for
-           Edge* edge_list_ptr = edge_list_;
-           GraphWeight* vertex_degree_ptr = vertex_degree_;
-           GraphElem* edge_indices_ptr = edge_indices_;
-#pragma omp target teams distribute parallel for \
-map(from:vertex_degree_ptr[0:nv_]) \
-map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
+#pragma omp target teams distribute parallel for 
 #else
 #pragma omp parallel for
 #endif
@@ -509,20 +474,12 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
                 #pragma omp task
 		    {
 #endif                  
-                     vertex_degree_[i] = 0;
-#if defined USE_OMP_ACCELERATOR
-                for (GraphElem e = edge_indices_ptr[i]; e < edge_indices_ptr[i+1]; e++)
-                {
-                    Edge const& edge = edge_list_ptr[e];
-                    vertex_degree_ptr[i] += edge.weight_;
-                }
-#else
-                for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
-                {
-                    Edge const& edge = edge_list_[e];
-                    vertex_degree_[i] += edge.weight_;
-                }
-#endif
+			    vertex_degree_[i] = 0;
+			    for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
+			    {
+				    Edge const& edge = edge_list_[e];
+				    vertex_degree_[i] += edge.weight_;
+			    }
 #ifdef USE_OMP_TASKS_FOR
 		    }
 #endif
@@ -550,7 +507,6 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 	    CALI_MARK_BEGIN("nbrmax");
 	    CALI_MARK_BEGIN("parallel");
 #endif
-            GraphElem e0, e1;
 #ifdef ENABLE_PREFETCH
 #ifdef __INTEL_COMPILER
 #pragma noprefetch vertex_degree_
@@ -568,43 +524,24 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-//#pragma omp target teams distribute parallel for map(to:edge_indices_[0,nv_+1]) \
-map(from:vertex_degree_[0:nv_]) map(to:edge_list_[0:ne_])
-//#pragma omp target map(to:edge_indices_[0,nv_+1]) map(to:edge_list_[0:ne_]) map(from:vertex_degree_[0:nv_])
-//#pragma omp teams distribute parallel for
-           Edge* edge_list_ptr = edge_list_;
-           GraphWeight* vertex_degree_ptr = vertex_degree_;
-           GraphElem* edge_indices_ptr = edge_indices_;
-#pragma omp target teams distribute parallel for \
-map(from:vertex_degree_ptr[0:nv_]) \
-map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
+#pragma omp target teams distribute parallel for 
 #else
 #pragma omp parallel for
 #endif
             for (GraphElem i = 0; i < nv_; i++)
             {
 #ifdef USE_OMP_TASKS_FOR
-                #pragma omp task
+#pragma omp task
 		    {
 #endif
-                GraphWeight wmax = -1.0;
-#if defined USE_OMP_ACCELERATOR
-                for (GraphElem e = edge_indices_ptr[i]; e < edge_indices_ptr[i+1]; e++)
-                {
-                    Edge const& edge = edge_list_ptr[e];
-                    if (wmax < edge.weight_)
-                        wmax = edge.weight_;
-                }
-                vertex_degree_ptr[i] = wmax;
-#else
-                for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
-                {
-                    Edge const& edge = edge_list_[e];
-                    if (wmax < edge.weight_)
-                        wmax = edge.weight_;
-                }
-                vertex_degree_[i] = wmax;
-#endif
+			    GraphWeight wmax = -1.0;
+			    for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
+			    {
+				    Edge const& edge = edge_list_[e];
+				    if (wmax < edge.weight_)
+					    wmax = edge.weight_;
+			    }
+			    vertex_degree_[i] = wmax;
 #ifdef USE_OMP_TASKS_FOR
 		    }
 #endif
