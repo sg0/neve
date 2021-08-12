@@ -699,7 +699,7 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
         void* get_edge_list() {return edge_list_;};
 
 #ifdef USE_CUDA
-        void map_data_on_device()
+        float map_data_on_device()
         {
             cudaMalloc((void**)&edge_indices_dev_, sizeof(GraphElem)*(nv_+1));
             cudaMalloc((void**)&edge_list_dev_, sizeof(Edge)*ne_);
@@ -709,8 +709,21 @@ map(to:edge_indices_ptr[0:nv_+1], edge_list_ptr[0:ne_])
             cudaMalloc((void**)&vertex_degree_dev_, sizeof(GraphWeight)*nv_);
             cudaMemset((void*)vertex_degree_dev_, 0, sizeof(GraphWeight)*nv_);
 
-            cudaMemcpy(edge_indices_dev_, edge_indices_, sizeof(GraphElem)*(nv_+1), cudaMemcpyHostToDevice);
-            cudaMemcpy(edge_list_dev_, edge_list_, sizeof(Edge)*ne_, cudaMemcpyHostToDevice);
+            cudaEvent_t start, stop;
+            float time;
+            cudaEventCreate(&start);
+            cudaEventCreate(&stop);
+  
+            cudaEventRecord(start, 0); 
+
+            cudaMemcpyAsync(edge_indices_dev_, edge_indices_, sizeof(GraphElem)*(nv_+1), cudaMemcpyHostToDevice, 0);
+            cudaMemcpyAsync(edge_list_dev_, edge_list_, sizeof(Edge)*ne_, cudaMemcpyHostToDevice, 0);
+
+            cudaEventRecord(stop, 0);
+            cudaEventSynchronize(stop);
+            cudaEventElapsedTime(&time, start, stop); 
+
+            return time;
         }
         void map_data_release_device()
         {

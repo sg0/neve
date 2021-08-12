@@ -42,7 +42,7 @@ maxOrder_(0), nv_per_batch_(0), ne_per_batch_(0)//, mass_(0)
     #ifdef CHECK
     std::cout << "Max order is " << maxOrder_ << std::endl;
     #endif
-    std::cout << "cehck " << edgesHost_[3612134267] << std::endl;
+    //std::cout << "cehck " << edgesHost_[3612134267] << std::endl;
 
     unsigned unit_size = (sizeof(GraphElem) > sizeof(GraphWeight)) ? sizeof(GraphElem) : sizeof(GraphWeight); 
     nv_per_batch_ = determine_optimal_vertices_per_batch(nv_, ne_, maxOrder_, unit_size); 
@@ -347,7 +347,7 @@ void GraphGPU::sort_edges_by_community_ids()
 
 void GraphGPU::singleton_partition()
 {
-    singleton_partition_cuda(commIds_, newCommIds_, commWeights_, vertexWeights_, nv_);
+    singleton_partition_cuda(commIds_, commWeights_, vertexWeights_, nv_);
     //copy_vector_cuda(newCommIds_, commIds_, nv_);
 }
 
@@ -356,7 +356,7 @@ GraphElem GraphGPU::max_order()
     return max_order_cuda(indices_, nv_);
 }
 
-void GraphGPU::sum_vertex_weights()
+float GraphGPU::sum_vertex_weights()
 {
     //GraphElem nbatches = (nv_+nv_per_batch_-1)/nv_per_batch_;
 
@@ -365,12 +365,21 @@ void GraphGPU::sum_vertex_weights()
     //cudaStreamCreate(&cuStreams[1]);
 
     //for(GraphElem b = 0; b < nbatches; ++b)
+    //cudaEvent_t start, stop;
+    float total = 0;
+    //cudaEventCreate(&start);
+    //cudaEventCreate(&stop);
+
     for(GraphElem b = 0; b < vertex_partition_.size()-1; ++b)
     {
         //GraphElem v0 = b*nv_per_batch_;
         //GraphElem v1 = v0 + nv_per_batch_;
         GraphElem v0 = vertex_partition_[b];
         GraphElem v1 = vertex_partition_[b+1];
+
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
 
         //v1 = (v1 > nv_) ? nv_: v1;
 
@@ -378,24 +387,42 @@ void GraphGPU::sum_vertex_weights()
         GraphElem e1 = indicesHost_[v1];
 
         //CudaMemcpyAsyncHtoD(edges_, edgesHost_+e0, sizeof(GraphElem)*(e1-e0), cuStreams[0]);
+        cudaEventRecord(start, 0);
+
         CudaMemcpyAsyncHtoD(edgeWeights_, edgeWeightsHost_+e0, sizeof(GraphWeight)*(e1-e0), 0);
+
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+        float time;
+        cudaEventElapsedTime(&time, start, stop);
+        total += time;
+
         //CudaDeviceSynchronize();
         sum_vertex_weights_cuda(vertexWeights_, (GraphWeight*)edgeWeights_, indices_, v0, v1, e0, e1);
         //CudaDeviceSynchronize();
     }
-
+    return total;
     //cudaStreamDestroy(cuStreams[0]);
     //cudaStreamDestroy(cuStreams[1]);  
 }
 
-void GraphGPU::scan_edges()
+float GraphGPU::scan_edges()
 {
     void* edgeListHost = graph_->get_edge_list();
     //CudaHostRegister(edgeListHost, sizeof(Edge)*ne_,cudaHostRegisterPortable);
     //GraphElem nbatches = (nv_+nv_per_batch_-1)/nv_per_batch_;
     //for(GraphElem b = 0; b < nbatches; ++b)
+    //cudaEvent_t start, stop;
+    float total = 0;
+    //cudaEventCreate(&start);
+    //cudaEventCreate(&stop);
+
     for(GraphElem b = 0; b < vertex_partition_.size()-1; ++b)
     {
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+
         //GraphElem v0 = b*nv_per_batch_;
         //GraphElem v1 = v0 + nv_per_batch_;
         GraphElem v0 = vertex_partition_[b];
@@ -403,22 +430,36 @@ void GraphGPU::scan_edges()
         v1 = (v1 > nv_) ? nv_ : v1;
         GraphElem e0 = indicesHost_[v0];
         GraphElem e1 = indicesHost_[v1];
-        
+        cudaEventRecord(start, 0);
         CudaMemcpyAsyncHtoD(commIdKeys_, ((Edge*)edgeListHost)+e0, sizeof(Edge)*(e1-e0),0);
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+        float time;
+        cudaEventElapsedTime(&time, start, stop);
+        total += time;
         scan_edges_cuda((GraphElem*)edges_, (Edge*)commIdKeys_, e0, e1);
-        CudaMemcpyAsyncDtoH(edgesHost_+e0, edges_, sizeof(GraphElem)*(e1-e0), 0);
+        //CudaMemcpyAsyncDtoH(edgesHost_+e0, edges_, sizeof(GraphElem)*(e1-e0), 0);
     }
+    return total;
     //CudaHostUnregister(edgeListHost);
 }
 
-void GraphGPU::scan_edge_weights()
+float GraphGPU::scan_edge_weights()
 {
     void* edgeListHost = graph_->get_edge_list();
     //CudaHostRegister(edgeListHost, sizeof(Edge)*ne_,cudaHostRegisterPortable);
     //GraphElem nbatches = (nv_+nv_per_batch_-1)/nv_per_batch_;
     //for(GraphElem b = 0; b < nbatches; ++b)
+    //cudaEvent_t start, stop;
+    float total = 0;
+    //cudaEventCreate(&start);
+    //cudaEventCreate(&stop);
+
     for(GraphElem b = 0; b < vertex_partition_.size()-1; ++b)
     {
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
         //GraphElem v0 = b*nv_per_batch_;
         //GraphElem v1 = v0 + nv_per_batch_;
         GraphElem v0 = vertex_partition_[b];
@@ -426,23 +467,40 @@ void GraphGPU::scan_edge_weights()
         //v1 = (v1 > nv_) ? nv_ : v1;
         GraphElem e0 = indicesHost_[v0];
         GraphElem e1 = indicesHost_[v1];
-        
+
+        cudaEventRecord(start, 0);        
         CudaMemcpyAsyncHtoD(commIdKeys_, ((Edge*)edgeListHost)+e0, sizeof(Edge)*(e1-e0),0);
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+        float time;
+        cudaEventElapsedTime(&time, start, stop);
+        total += time;
+
         //CudaMemcpyHtoD(commIdKeys_, ((Edge*)edgeListHost)+e0, sizeof(Edge)*(e1-e0));
         scan_edge_weights_cuda((GraphWeight*)edgeWeights_, (Edge*)commIdKeys_, e0, e1);
-        CudaMemcpyAsyncDtoH(edgeWeightsHost_+e0, edgeWeights_, sizeof(GraphWeight)*(e1-e0), 0);
+        //CudaMemcpyAsyncDtoH(edgeWeightsHost_+e0, edgeWeights_, sizeof(GraphWeight)*(e1-e0), 0);
         //CudaMemcpyDtoH(edgeWeightsHost_+e0, edgeWeights_, sizeof(GraphWeight)*(e1-e0));
     }
+    return total;
     //CudaDeviceSynchronize();
     //CudaHostUnregister(edgeListHost);
 }
 
-void GraphGPU::max_vertex_weights()
+float GraphGPU::max_vertex_weights()
 {
     //GraphElem nbatches = (nv_+nv_per_batch_-1)/nv_per_batch_;
     //for(GraphElem b = 0; b < nbatches; ++b)
+    //cudaEvent_t start, stop;
+    float total = 0;
+    //cudaEventCreate(&start);
+    //cudaEventCreate(&stop);
+
     for(GraphElem b = 0; b < vertex_partition_.size()-1; ++b)
     {
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+
         //GraphElem v0 = b*nv_per_batch_;
         //GraphElem v1 = v0 + nv_per_batch_;
         GraphElem v0 = vertex_partition_[b];
@@ -450,11 +508,18 @@ void GraphGPU::max_vertex_weights()
         //v1 = (v1 > nv_) ? nv_ : v1;
         GraphElem e0 = indicesHost_[v0];
         GraphElem e1 = indicesHost_[v1];
-        
+        cudaEventRecord(start, 0);        
         CudaMemcpyAsyncHtoD(edgeWeights_, edgeWeightsHost_+e0, sizeof(GraphWeight)*(e1-e0),0);
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+        float time;
+        cudaEventElapsedTime(&time, start, stop);
+        total += time;
+
         max_vertex_weights_cuda(vertexWeights_, (GraphWeight*)edgeWeights_, indices_, v0, v1, e0, e1);
         //CudaMemcpyAsyncDtoH(edgeWeightsHost_+e0, vertexWeights_, sizeof(GraphWeight)*(v1-v0), 0);
     }
+    return total;
 }
 //#if 0
 void GraphGPU::louvain_update()
@@ -662,7 +727,7 @@ GraphWeight GraphGPU::compute_modularity()
         build_local_commid_offsets_cuda(((GraphElem*)commIdKeys_), ((GraphElem*)commIdKeys_)+ne,
         (GraphElem*)edges_, indices_, commIds_, v0, v1, e0, e1);
  
-        compute_modularity_reduce_cuda<BLOCKDIM02, WARPSIZE>(mod, (GraphElem*)edges_, (GraphWeight*)edgeWeights_, indices_, 
+        compute_modularity_reduce_cuda(mod, (GraphElem*)edges_, (GraphWeight*)edgeWeights_, indices_, 
         commIds_, commWeights_, ((GraphElem*)commIdKeys_), ((GraphElem*)commIdKeys_)+ne, mass_, v0, v1, e0, e1);
     }
 

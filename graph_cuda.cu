@@ -358,7 +358,7 @@ void sum_vertex_weights_kernel
             w += warp.shfl_down(w, i);
  
         if(warp_tid == 0) 
-            vertex_weights[u+v_base] += w;
+            vertex_weights[u+v_base] = w;
         //warp.sync();
     }
 }
@@ -1759,10 +1759,10 @@ void compute_modularity_reduce_cuda
 )
 {
     GraphElem nv = v1 - v0;
-    long long nblocks = (nv+(BLOCKDIM01/8)-1)/(BLOCKDIM01/8);
+    long long nblocks = (nv+(BLOCKDIM02/WARPSIZE)-1)/(BLOCKDIM02/WARPSIZE);
     nblocks = (nblocks > MAX_GRIDDIM) ? MAX_GRIDDIM : nblocks;
 
-    CudaLaunch((compute_modularity_reduce_kernel<BLOCKDIM01, 8><<<nblocks, BLOCKDIM01, 0, stream>>>
+    CudaLaunch((compute_modularity_reduce_kernel<BLOCKDIM02, WARPSIZE><<<nblocks, BLOCKDIM02, 0, stream>>>
     (mod, edges, edgeWeights, indices, commIds, commWeights, localCommOffsets, localCommNums, mass, v0, e0, nv)));
 }
 

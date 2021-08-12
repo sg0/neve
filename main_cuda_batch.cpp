@@ -244,7 +244,8 @@ int main(int argc, char **argv)
 #endif
 
     //perform the batching gpu part
-    float times_cuda[3][NTIMES]; 
+    float times_cuda[3][NTIMES];
+    float copy_times[3][NTIMES]; 
     double avgtime_cuda[3] = {0}, maxtime_cuda[3] = {0}, mintime_cuda[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
 
     GraphGPU* g_cuda = new GraphGPU(g);
@@ -253,41 +254,48 @@ int main(int argc, char **argv)
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    
+    #ifdef CHECK
     GraphWeight* e_ws = new GraphWeight [ne];
     GraphWeight* v_ws = new GraphWeight [nv];
+
     g->nbrscan();
+
     GraphWeight* weights = g->get_edge_weights();
     std::copy(weights, weights+ne,e_ws);
-
+    #endif
     for (int k = 0; k < NTIMES; k++)
     {
         cudaEventRecord(start, 0);
-        g_cuda->scan_edge_weights();
+        float t = g_cuda->scan_edge_weights();
         cudaEventRecord(stop, 0);
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&times_cuda[0][k], start, stop);
+        copy_times[0][k] = t;
     }
-    //check results; 
+    //check results;
+    #ifdef CHECK 
     GraphWeight err = 0.;
     for(GraphElem i = 0; i < ne; ++i)
         err += std::pow(weights[i]-e_ws[i],2);
     std::cout << "function scan error: " << err << std::endl;
 
     g->nbrmax();
+
     weights = g->get_vertex_weights();
     GraphWeight* weights_dev = (GraphWeight*)(g_cuda->get_vertex_weights());
-
+    #endif
     //std::copy(weights, weights+nv, v_ws);
     for (int k = 0; k < NTIMES; k++)
     {
         cudaEventRecord(start, 0);
-        g_cuda->max_vertex_weights();
+        float t = g_cuda->max_vertex_weights();
         cudaEventRecord(stop, 0);
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&times_cuda[1][k], start, stop);
+        copy_times[1][k] = t;
     }
     //check resutls
+    #ifdef CHECK
     CudaMemcpyDtoH(v_ws, weights_dev, sizeof(GraphWeight)*nv);
     err = 0.;
     for(GraphElem i = 0; i < nv; ++i)
@@ -295,16 +303,20 @@ int main(int argc, char **argv)
     std::cout << "function of max weights: "<< err << std::endl;
 
     g->nbrsum();
-    //std::copy(weights, weights+nv, v_ws);
+
+    std::copy(weights, weights+nv, v_ws);
+    #endif
     for (int k = 0; k < NTIMES; k++)   
     {   
         cudaEventRecord(start, 0);      
-        g_cuda->sum_vertex_weights();
+        float t = g_cuda->sum_vertex_weights();
         cudaEventRecord(stop, 0);
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&times_cuda[2][k], start, stop);
+        copy_times[2][k] = t;
     }
     //check results
+    #ifdef CHECK
     CudaMemcpyDtoH(v_ws, weights_dev, sizeof(GraphWeight)*nv);
     err = 0.;
     for(GraphElem i = 0; i < nv; ++i)
@@ -313,6 +325,7 @@ int main(int argc, char **argv)
 
     delete [] e_ws;
     delete [] v_ws;
+    #endif
 
     for (int k = 1; k < NTIMES; k++) // note -- skip first iteration
     {
@@ -321,6 +334,20 @@ int main(int argc, char **argv)
             avgtime_cuda[j] = avgtime_cuda[j] + times_cuda[j][k];
             mintime_cuda[j] = std::min(mintime_cuda[j], (double)times_cuda[j][k]);
             maxtime_cuda[j] = std::max(maxtime_cuda[j], (double)times_cuda[j][k]);
+        }
+    }
+
+    double avgtime_copy[3] = {0};
+    double mintime_copy[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
+    double maxtime_copy[3] = {0};
+
+    for (int k = 1; k < NTIMES; k++) // note -- skip first iteration
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            avgtime_copy[j] = avgtime_copy[j] + copy_times[j][k];
+            mintime_copy[j] = std::min(mintime_copy[j], (double)copy_times[j][k]);
+            maxtime_copy[j] = std::max(maxtime_copy[j], (double)copy_times[j][k]);
         }
     }
 
@@ -336,6 +363,18 @@ int main(int argc, char **argv)
                 1.0E-06 * bytes[j]/mintime_cuda[j]*1.0E03, avgtime_cuda[j]*1.0E-03, 
                 mintime_cuda[j]*1.0E-03,maxtime_cuda[j]*1.0E-03);
     }
+
+    double copy_bytes[3] = {(double)sizeof(Edge)*ne, (double)sizeof(GraphWeight)*ne, (double)sizeof(GraphWeight)*ne};
+    printf("                            GPU Copy Profile                           \n");
+    printf("Best Rate MB/s  Avg time     Min time     Max time\n");
+    for (int j = 0; j < 3; j++)
+    {
+        avgtime_copy[j] = avgtime_copy[j]/(double)(NTIMES-1);
+        std::printf("%11.6f %11.6f  %11.6f  %11.6f\n",
+                1.0E-06 * copy_bytes[j]/mintime_copy[j]*1.0E03, avgtime_copy[j]*1.0E-03,
+                mintime_copy[j]*1.0E-03,maxtime_copy[j]*1.0E-03);
+    }
+
     delete g_cuda;
     delete g;
     return 0;

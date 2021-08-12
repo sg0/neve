@@ -52,10 +52,10 @@ class GraphGPU
     void sort_edges_by_community_ids();
     void singleton_partition();
     GraphElem max_order();
-    void scan_edges();
-    void scan_edge_weights();
-    void sum_vertex_weights();
-    void max_vertex_weights();
+    float scan_edges();
+    float scan_edge_weights();
+    float sum_vertex_weights();
+    float max_vertex_weights();
 
     void build_local_comm_offsets();
 
