@@ -189,51 +189,18 @@ int main(int argc, char **argv)
 
     printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
 
+    double copy_time = 0.0;
+
 #ifdef USE_OMP_ACCELERATOR
-    times[0][0] = omp_get_wtime();
-#pragma omp target enter data \
-    map(to:g, g->edge_indices_[0:nv+1], g->edge_list_[0:ne]) 
-    {
-      for (int k = 0; k < NTIMES; k++)
-      {
-        g->nbrscan();
-      }
-    }
-#pragma omp target exit data \
-    map(from:g->edges_[0:ne])
-    times[0][0] = omp_get_wtime() - times[0][0];
-    times[1][0] = omp_get_wtime();
-#pragma omp target enter data \
-    map(to:g, g->edge_indices_[0:nv+1], g->edge_list_[0:ne], g->vertex_degree_[0:nv])
-    {
-      for (int k = 0; k < NTIMES; k++)
-      {
-        g->nbrsum();
-      }
-    }
-#pragma omp target exit data \
-    map(from:g->vertex_degree_[0:nv])
-    times[1][0] = omp_get_wtime() - times[1][0];
-    times[2][0] = omp_get_wtime();
 #pragma omp target enter data \
     map(to:g, g->edge_indices_[0:nv+1], g->edge_list_[0:ne])
-    {
-      for (int k = 0; k < NTIMES; k++)
-      {
-        g->nbrmax();
-      }
-    }
-#pragma omp target exit data \
-    map(from:g->vertex_degree_[0:nv])
-    times[2][0] = omp_get_wtime() - times[2][0];
-    for (int j = 0; j < 3; j++) 
-    {
-        times[j][0] = times[j][0]/(double)(NTIMES);
-        std::printf("%s%12.1f  %12.6f  %11.6f  %11.6f\n", label[j].c_str(),
-                1.0E-06 * bytes[j]/times[j][0], times[j][0], times[j][0],
-                times[j][0]);
-    }
-#else
+#endif
+    // time data transfer
+#ifdef USE_OMP_ACCELERATOR
+    copy_time = omp_get_wtime();
+#pragma omp target update to(g->edge_indices_[0:nv+1], g->edge_list_[0:ne])
+    copy_time = omp_get_wtime() - copy_time;
+#endif
     for (int k = 0; k < NTIMES; k++)
     {
         times[0][k] = omp_get_wtime();
@@ -246,7 +213,10 @@ int main(int argc, char **argv)
         g->nbrmax();
         times[2][k] = omp_get_wtime() - times[2][k];
     }
-
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp target exit data \
+    map(from:g->vertex_degree_[0:nv], g->edges_[0:ne])
+#endif
     for (int k = 1; k < NTIMES; k++) // note -- skip first iteration
     {
         for (int j = 0; j < 3; j++)
@@ -261,10 +231,9 @@ int main(int argc, char **argv)
     {
         avgtime[j] = avgtime[j]/(double)(NTIMES-1);
         std::printf("%s%12.1f  %12.6f  %11.6f  %11.6f\n", label[j].c_str(),
-                1.0E-06 * bytes[j]/mintime[j], avgtime[j], mintime[j],
-                maxtime[j]);
+                1.0E-06 * bytes[j]/(copy_time + mintime[j]), (copy_time + avgtime[j]), (copy_time + mintime[j]),
+                (copy_time + maxtime[j]));
     }
-#endif
 #endif
     
     return 0;

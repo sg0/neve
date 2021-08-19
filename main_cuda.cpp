@@ -84,7 +84,7 @@ static void parseCommandLine(int argc, char** argv);
 
 int main(int argc, char **argv)
 {
-    double t0, t1, td, td0, td1;
+    double t0, td, td0, td1;
 
     parseCommandLine(argc, argv);
  
@@ -274,7 +274,7 @@ int main(int argc, char **argv)
     printf("                            GPU Copy Profile                          \n");
     float copy_size = (sizeof(Edge)*ne+sizeof(GraphElem)*(nv+1))/(1024.f*1024.f*1024.f);
     std::printf("Ave. Time: %12.6fs. Bandwidth %12.6fGB/s\n", copy_time*1.0E-03, copy_size/copy_time*1.0E03);
-    printf("				GPU Profile				  \n");
+    printf("				GPU Profile 				  \n");
     printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
     for (int j = 0; j < 3; j++)
     {
