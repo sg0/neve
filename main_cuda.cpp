@@ -232,6 +232,10 @@ int main(int argc, char **argv)
     float times_cuda[3][NTIMES]; 
     double avgtime_cuda[3] = {0}, maxtime_cuda[3] = {0}, mintime_cuda[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
     float copy_time = g->map_data_on_device();
+#if defined(INCLUDE_TRANSFER_TIME)
+#else
+    copy_time = 0.0;
+#endif
     //for gpu timer
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
@@ -271,9 +275,12 @@ int main(int argc, char **argv)
 
     //std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
     //double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
+#if defined(INCLUDE_TRANSFER_TIME)
     printf("                            GPU Copy Profile                          \n");
     float copy_size = (sizeof(Edge)*ne+sizeof(GraphElem)*(nv+1))/(1024.f*1024.f*1024.f);
     std::printf("Ave. Time: %12.6fs. Bandwidth %12.6fGB/s\n", copy_time*1.0E-03, copy_size/copy_time*1.0E03);
+#else
+#endif
     printf("				GPU Profile 				  \n");
     printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
     for (int j = 0; j < 3; j++)

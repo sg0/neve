@@ -61,7 +61,7 @@
 #include "utils.hpp"
 #include <unistd.h>
 
-unsigned seed;
+//unsigned seed;
 
 #ifdef USE_CUDA
 #include "graph.cuh"

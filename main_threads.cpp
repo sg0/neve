@@ -62,6 +62,8 @@
 // A lot of print diagnostics is lifted from
 // the STREAM benchmark.
 
+unsigned seed;
+
 static std::string inputFileName;
 static GraphElem nvRGG = 0;
 static int generateGraph = 0;
@@ -196,6 +198,11 @@ int main(int argc, char **argv)
     copy_time = omp_get_wtime();
 #pragma omp target update to(g->edge_indices_[0:nv+1], g->edge_list_[0:ne])
     copy_time = omp_get_wtime() - copy_time;
+#endif
+
+#if defined(INCLUDE_TRANSFER_TIME)
+#else
+    copy_time = 0.0;
 #endif
     for (int k = 0; k < NTIMES; k++)
     {
