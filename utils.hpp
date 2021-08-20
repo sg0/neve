@@ -517,4 +517,35 @@ inline void unlock() {
 #endif // end of SSTMAC
 #endif
 
+#ifdef USE_OMP_ACCELERATOR
+// influenced from:
+// https://github.com/khaled3ttia/libompx/blob/c18d3a1cccf9d1fadd1cf647793c189c9b25066c/include/cuwrapper/CUWrapper.h#L50
+template <typename T>
+void ompMemcpy(T *dst, T *src, size_t length, const char* direction) 
+{
+  // First, make sure we have at least one nonhost device
+  int num_devices = omp_get_num_devices();
+  assert(num_devices > 0);
+
+  // get the host device number (which is the initial device)
+  int host_device_num = omp_get_initial_device();
+
+  // use default device for gpu
+  int gpu_device_num = omp_get_default_device();
+
+  // default to copy from host to device
+  int dst_device_num = gpu_device_num;
+  int src_device_num = host_device_num;
+
+  if (std::strncmp(direction, "D2H", 3) == 0) 
+  {
+    // copy from device to host
+    dst_device_num = host_device_num;
+    src_device_num = gpu_device_num;
+  }
+
+  // parameters are now set, call omp_target_memcpy
+  omp_target_memcpy(dst, src, length, 0, 0, dst_device_num, src_device_num);
+}
+#endif
 #endif // UTILS

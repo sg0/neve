@@ -119,6 +119,11 @@ class Graph
             edge_indices_   = new GraphElem[nv_+1];
             vertex_degree_  = new GraphWeight[nv_];
             #endif
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp target enter data map(to:this[:1])
+#pragma omp target enter data map(alloc:edge_indices_[0:nv_+1])
+#pragma omp target enter data map(alloc:vertex_degree_[0:nv_])
+#endif
         }
 
         Graph(GraphElem nv, GraphElem ne): 
@@ -137,10 +142,23 @@ class Graph
             edge_weights_   = new GraphWeight[ne_];
             edges_          = new GraphElem[ne_];
             #endif
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp target enter data map(to:this[:1])
+#pragma omp target enter data map(alloc:edge_indices_[0:nv_+1])
+#pragma omp target enter data map(alloc:edge_list_[0:ne_])
+#pragma omp target enter data map(alloc:vertex_degree_[0:nv_])
+#pragma omp target enter data map(alloc:edge_weights_[0:ne_])
+#pragma omp target enter data map(alloc:edges_[0:ne_])
+#endif
         }
 
         ~Graph() 
         {
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp target exit data map(from:vertex_degree_[0:nv_])
+#pragma omp target exit data map(from:edge_weights_[0:ne_])
+#pragma omp target exit data map(from:edges_[0:ne_])
+#endif
             #ifdef USE_PINNED_HOST
             cudaFreeHost(edge_indices_);
             cudaFreeHost(edge_list_);
@@ -155,7 +173,8 @@ class Graph
             delete [] edges_;
             #endif
         }
-        
+       
+        /* 
         #ifdef USE_OMP_ACCELERATOR                  
         Graph(const Graph &g) 
         {
@@ -165,7 +184,11 @@ class Graph
             memcpy(edge_indices_, g.edge_indices_, sizeof(__GraphElem__)*(nv_+1)); 
         }
         #endif
+        */
 
+        Graph(const Graph &other) = delete;
+        Graph& operator=(const Graph& d) = delete;
+ 
         void set_edge_index(GraphElem const vertex, GraphElem const e0)
         {
 #if defined(DEBUG_BUILD)
@@ -196,6 +219,14 @@ class Graph
             edge_weights_   = new GraphWeight[ne_];
             edges_          = new GraphElem[ne_];
             #endif
+#ifdef USE_OMP_ACCELERATOR
+#pragma omp target enter data map(to:this[:1])
+#pragma omp target enter data map(alloc:edge_indices_[0:nv_+1])
+#pragma omp target enter data map(alloc:edge_list_[0:ne_])
+#pragma omp target enter data map(alloc:vertex_degree_[0:nv_])
+#pragma omp target enter data map(alloc:edge_weights_[0:ne_])
+#pragma omp target enter data map(alloc:edges_[0:ne_])
+#endif
         }
 
         GraphElem get_nv() const { return nv_; }
@@ -551,6 +582,46 @@ map(from:edge_weights_[0:ne_])
 	    CALI_MARK_END("nbrmax");
 #endif
         }
+         
+
+        inline void nbrscan_serial() 
+        {
+          for (GraphElem i = 0; i < nv_; i++)
+          {
+            for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
+            {
+              Edge const& edge = edge_list_[e];
+				      edge_weights_[e] = edge.weight_;
+            }
+          }
+        }
+    
+        inline void nbrsum_serial() 
+        {
+          for (GraphElem i = 0; i < nv_; i++)
+          {
+            for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
+            {
+              Edge const& edge = edge_list_[e];
+              vertex_degree_[i] += edge.tail_;
+            }
+          }
+        }
+
+        inline void nbrmax_serial() 
+        {
+          for (GraphElem i = 0; i < nv_; i++)
+          {
+            GraphWeight wmax = -1.0;
+            for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
+            {
+              Edge const& edge = edge_list_[e];
+              if (wmax < edge.weight_)
+                wmax = edge.weight_;
+            }
+            vertex_degree_[i] = wmax;
+          }
+        }
 
         
 	// print statistics about edge distribution
@@ -618,7 +689,33 @@ map(from:edge_weights_[0:ne_])
             delete [] edge_weights_buff;
             delete [] vertex_degree_buff;
         }
+#endif
+#ifdef USE_OMP_ACCELERATOR
+        void check_results()
+        {
+            GraphWeight *edge_weights_buff, *vertex_degree_buff;
+            edge_weights_buff = new GraphWeight[ne_];
+            vertex_degree_buff = new GraphWeight[nv_];
+
+
+            std::memcpy(edge_weights_buff,  edge_weights_,  sizeof(GraphWeight)*ne_);
+            std::memcpy(vertex_degree_buff, vertex_degree_, sizeof(GraphWeight)*nv_);
+
+#pragma omp target update from(edge_weights_[0:ne_], vertex_degree_[0:nv_])
+
+            double error1 = 0., error2 = 0.;
+            for(GraphElem i = 0; i < ne_; ++i)
+                error1 += std::pow(edge_weights_buff[i]-edge_weights_[i],2);
+            for(GraphElem i = 0; i < nv_; ++i)
+                error2 += std::pow(vertex_degree_buff[i]-vertex_degree_[i],2);
+            std::printf("Error of Copy function %lf\n", error1);
+            std::printf("Error of Sum and Max function %lf\n", error2);
+
+            delete [] edge_weights_buff;
+            delete [] vertex_degree_buff;
+        }
 #endif 
+
         // public variables
         GraphElem *edge_indices_;
         Edge *edge_list_;

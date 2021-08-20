@@ -191,10 +191,6 @@ int main(int argc, char **argv)
 
     double copy_time = 0.0;
 
-#ifdef USE_OMP_ACCELERATOR
-#pragma omp target enter data \
-    map(to:g, g->edge_indices_[0:nv+1], g->edge_list_[0:ne])
-#endif
     // time data transfer
 #ifdef USE_OMP_ACCELERATOR
     copy_time = omp_get_wtime();
@@ -213,10 +209,7 @@ int main(int argc, char **argv)
         g->nbrmax();
         times[2][k] = omp_get_wtime() - times[2][k];
     }
-#ifdef USE_OMP_ACCELERATOR
-#pragma omp target exit data \
-    map(from:g->vertex_degree_[0:nv], g->edges_[0:ne])
-#endif
+
     for (int k = 1; k < NTIMES; k++) // note -- skip first iteration
     {
         for (int j = 0; j < 3; j++)
@@ -234,6 +227,12 @@ int main(int argc, char **argv)
                 1.0E-06 * bytes[j]/(copy_time + mintime[j]), (copy_time + avgtime[j]), (copy_time + mintime[j]),
                 (copy_time + maxtime[j]));
     }
+#ifdef USE_OMP_ACCELERATOR 
+    g->nbrscan_serial();
+    g->nbrsum_serial();
+    g->nbrmax_serial();
+    g->check_results(); 
+#endif
 #endif
     
     return 0;
