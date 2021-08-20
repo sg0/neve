@@ -532,11 +532,12 @@ map(from:edge_weights_[0:ne_])
             //cudaMemcpy(vertex_degree_, vertex_degree_dev_, sizeof(GraphWeight)*nv_, cudaMemcpyDeviceToHost);
         }
 #endif
+
         inline void nbrmax() 
         {
 #ifdef LLNL_CALIPER_ENABLE
-	    CALI_MARK_BEGIN("nbrmax");
-	    CALI_MARK_BEGIN("parallel");
+      CALI_MARK_BEGIN("nbrmax");
+      CALI_MARK_BEGIN("parallel");
 #endif
 #ifdef ENABLE_PREFETCH
 #ifdef __INTEL_COMPILER
@@ -563,27 +564,28 @@ map(from:edge_weights_[0:ne_])
             {
 #ifdef USE_OMP_TASKS_FOR
 #pragma omp task
-		    {
+        {
 #endif
-			    GraphWeight wmax = -1.0;
-			    for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
-			    {
-				    Edge const& edge = edge_list_[e];
-				    if (wmax < edge.weight_)
-					    wmax = edge.weight_;
-			    }
-			    vertex_degree_[i] = wmax;
+          GraphWeight wmax = -1.0;
+          for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
+          {
+            Edge const& edge = edge_list_[e];
+            if (wmax < edge.weight_)
+              wmax = edge.weight_;
+          }
+          vertex_degree_[i] = wmax;
 #ifdef USE_OMP_TASKS_FOR
-		    }
+        }
 #endif
             }
 #ifdef LLNL_CALIPER_ENABLE
-	    CALI_MARK_END("parallel");
-	    CALI_MARK_END("nbrmax");
+      CALI_MARK_END("parallel");
+      CALI_MARK_END("nbrmax");
 #endif
         }
-         
 
+        // ne * ((sizeof(GraphElem) + sizeof(GraphWeight))
+        // + 2*sizeof(GraphWeight))
         inline void nbrscan_serial() 
         {
           for (GraphElem i = 0; i < nv_; i++)
@@ -595,7 +597,9 @@ map(from:edge_weights_[0:ne_])
             }
           }
         }
-    
+ 
+        // ne * ((sizeof(GraphElem) + sizeof(GraphWeight))
+        // + 3*sizeof(GraphElem))   
         inline void nbrsum_serial() 
         {
           for (GraphElem i = 0; i < nv_; i++)
@@ -607,7 +611,9 @@ map(from:edge_weights_[0:ne_])
             }
           }
         }
-
+ 
+        // ne * ((sizeof(GraphElem) + sizeof(GraphWeight))
+        // + 2*sizeof(GraphWeight))
         inline void nbrmax_serial() 
         {
           for (GraphElem i = 0; i < nv_; i++)
