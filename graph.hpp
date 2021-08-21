@@ -433,9 +433,7 @@ class Graph
 #pragma omp parallel
 #pragma omp for
 #elif defined USE_OMP_ACCELERATOR
-#pragma omp target teams distribute parallel for \
-map(to:edge_indices_[0:nv_+1], edge_list_[0:ne_]) \
-map(from:edge_weights_[0:ne_])
+#pragma omp target teams distribute parallel for 
 #else
 #pragma omp parallel for
 #endif
