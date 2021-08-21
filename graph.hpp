@@ -303,8 +303,7 @@ class Graph
 #endif
 				for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
 				{
-					Edge const& edge = edge_list_[e];
-					edges_[e] = edge.tail_;
+					edges_[e] = edge_list_[e].tail_;
 				}
 #ifdef USE_OMP_TASKS_FOR
 			}
@@ -445,8 +444,7 @@ class Graph
 #endif
 			    for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
 			    {
-				    Edge const& edge = edge_list_[e];
-				    edge_weights_[e] = edge.weight_;
+				    edge_weights_[e] = edge_list_[e].weight_;
 			    }
 #ifdef USE_OMP_TASKS_FOR
 		    }
@@ -506,8 +504,7 @@ class Graph
 			    vertex_degree_[i] = 0;
 			    for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
 			    {
-				    Edge const& edge = edge_list_[e];
-				    vertex_degree_[i] += edge.weight_;
+				    vertex_degree_[i] += edge_list_[e].weight_;
 			    }
 #ifdef USE_OMP_TASKS_FOR
 		    }
@@ -567,9 +564,8 @@ class Graph
           GraphWeight wmax = -1.0;
           for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
           {
-            Edge const& edge = edge_list_[e];
-            if (wmax < edge.weight_)
-              wmax = edge.weight_;
+            if (wmax < edge_list_[e].weight_)
+              wmax = edge_list_[e].weight_;
           }
           vertex_degree_[i] = wmax;
 #ifdef USE_OMP_TASKS_FOR
@@ -590,8 +586,7 @@ class Graph
           {
             for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
             {
-              Edge const& edge = edge_list_[e];
-				      edge_weights_[e] = edge.weight_;
+				      edge_weights_[e] = edge_list_[e].weight_;
             }
           }
         }
@@ -604,8 +599,7 @@ class Graph
           {
             for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
             {
-              Edge const& edge = edge_list_[e];
-              vertex_degree_[i] += edge.tail_;
+              vertex_degree_[i] += edge_list_[e].tail_;
             }
           }
         }
@@ -619,9 +613,8 @@ class Graph
             GraphWeight wmax = -1.0;
             for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
             {
-              Edge const& edge = edge_list_[e];
-              if (wmax < edge.weight_)
-                wmax = edge.weight_;
+              if (wmax < edge_list_[e].weight_)
+                wmax = edge_list_[e].weight_;
             }
             vertex_degree_[i] = wmax;
           }

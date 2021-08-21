@@ -180,7 +180,7 @@ int main(int argc, char **argv)
     std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
     double bytes[3] = { (double)ne, (double)ne, (double)ne };
 
-    printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
+    printf("Function            Best Rate TEPs  Avg time     Min time     Max time\n");
 
     double copy_time = 0.0;
 
