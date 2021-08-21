@@ -149,6 +149,25 @@ int main(int argc, char **argv)
     std::printf(" will be used to compute the reported bandwidth.\n");
 #endif
 
+#ifdef _OPENMP
+    std::cout << "-----------------------------------------------------" << std::endl;
+#pragma omp parallel 
+    {
+#pragma omp master
+      {
+        printf ("Number of Threads requested = %i\n",omp_get_num_threads());
+      }
+    }
+#endif
+#ifdef _OPENMP
+    int k = 0;
+#pragma omp parallel
+#pragma omp atomic 
+    k++;
+    printf ("Number of Threads counted = %i\n",k);
+    std::cout << "-----------------------------------------------------" << std::endl;
+#endif
+
     int quantum;
     if  ( (quantum = omp_get_wtick()) >= 1)
         std::printf("Your clock granularity/precision appears to be "
