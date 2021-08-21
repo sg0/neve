@@ -178,7 +178,7 @@ int main(int argc, char **argv)
     double avgtime[3] = {0}, maxtime[3] = {0}, mintime[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
 
     std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
-    double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
+    double bytes[3] = { (double)ne, (double)ne, (double)ne };
 
     printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
 

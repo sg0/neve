@@ -226,7 +226,7 @@ int main(int argc, char **argv)
     }
 
     std::string label[3] = {"Neighbor Copy:    ", "Neighbor Max :    ", "Neighbor Add :    "};
-    double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
+    double bytes[3] = { (double)ne, (double)ne, (double)ne };
 
     printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
     for (int j = 0; j < 3; j++) 
