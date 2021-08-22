@@ -586,7 +586,7 @@ class Graph
           {
             for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
             {
-				      edge_weights_[e] = edge_list_[e].weight_;
+              edge_weights_[e] = edge_list_[e].weight_;
             }
           }
         }
@@ -599,7 +599,7 @@ class Graph
           {
             for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
             {
-              vertex_degree_[i] += edge_list_[e].tail_;
+              vertex_degree_[i] += edge_list_[e].weight_;
             }
           }
         }
