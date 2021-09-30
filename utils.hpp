@@ -143,6 +143,19 @@ T genRandom(T lo, T hi)
     return utd(gen, typename Dist::param_type{lo, hi});
 }
 
+// https://stackoverflow.com/questions/3909272/sorting-two-corresponding-arrays
+class sort_indices
+{
+   public:
+     sort_indices(GraphElem* ptr) : ptr_(ptr) {}
+     
+     bool operator()(GraphElem i, GraphElem j) const 
+     { return ptr_[i] < ptr_[j]; }
+   
+   private:
+     GraphElem* ptr_;
+};
+
 // Parallel Linear Congruential Generator
 // x[i] = (a*x[i-1] + b)%M
 

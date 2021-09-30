@@ -77,6 +77,7 @@ static bool performLTTestNbrAlltoAll = false;
 static bool performLTTestNbrAllGather = false;
 static std::string rankOrderFileName; 
 static bool createRankOrder = false;
+static int rankOrderType = 0;
 
 static bool chooseSingleNbr = false;
 static int processNbr = 0;
@@ -146,8 +147,13 @@ int main(int argc, char **argv)
     g->print_dist_stats();
     assert(g != nullptr);
 
-    if (createRankOrder)
-        g->rank_order(rankOrderFileName);
+    if (createRankOrder) 
+    {
+	if (rankOrderType == 0)
+	    g->rank_order();
+	else
+	    g->weighted_rank_order();
+    }
 
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -382,7 +388,7 @@ void parseCommandLine(int argc, char** const argv)
       fallAsleep = true;
       break;
     case 'o':
-      rankOrderFileName.assign(optarg);
+      rankOrderType = atoi(optarg);
       createRankOrder = true;
       break;
     default:
