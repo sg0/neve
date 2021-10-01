@@ -71,6 +71,13 @@ real-world (same binary format) and synthetic graphs (using the RGG generator as
 Please contact the following for any queries or support:
 Sayan Ghosh, PNNL (sg0 at pnnl dot gov)
 
+Related paper (only covers the communication aspects):
+Ghosh S, Tallent N, Halappanavar M. Characterizing Performance of Graph
+Neighborhood Communication Patterns. IEEE Transactions on Parallel and
+Distributed Systems. 2021 Aug 2.
+https://ieeexplore.ieee.org/abstract/document/9503355
+
+
 *******
 Compile
 *******
@@ -163,12 +170,13 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
                       distributed across 4 processes, and PE#0 has two neighbors, PE#1 and PE#3
                       with whom it shares a 100 ghost vertices each. In such a configuration, 
                       the b/w test would perform variable-sized message exchanges a 100 times 
-		      between PE#0 and {PE#1, PE#3}. The -z <percent> option can limit the 
+		                  between PE#0 and {PE#1, PE#3}. The -z <percent> option can limit the 
                       number of message exchanges by selecting a percentage of the actual the number 
                       of ghosts, but maintaining the overall structure of the original graph. 
                       Hence, this option can help 'shrink' a graph. Only valid for b/w test, because
-		      latency test will just perform message transfers between process neighborhoods.
-15. -o <filename>   : Generates comma-separated MPI rank order.
+		                  latency test will just perform message transfers between process neighborhoods.
+15. -o <1|2|3>      : Generates comma-separated MPI rank order based on graph distribution across processes 
+                      - regular (1), weighted (2) and graph matching (3). 
 
 [*]Note: Unless -w or -t <...> is passed, the code will just load the graph and create the graph data 
 structure. This is deliberate, in case we want to measure the overhead of loading a graph and 
