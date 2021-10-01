@@ -1064,7 +1064,7 @@ class Graph
                 }
 
                 std::ofstream ofile;
-                ofile.open(outfile.c_str(), std::ofstream::out | std::ofstream::app);
+                ofile.open(outfile.c_str(), std::ofstream::out);
 
                 for (int p = 0; p < size_-1; p++)
                     ofile << pe_list_nodup[p] << ",";
@@ -1187,7 +1187,7 @@ class Graph
                 }
 
                 std::ofstream ofile;
-                ofile.open(outfile.c_str(), std::ofstream::out | std::ofstream::app);
+                ofile.open(outfile.c_str(), std::ofstream::out);
 
                 for (int p = 0; p < size_-1; p++)
                     ofile << pe_list_nodup[p] << ",";
@@ -1215,12 +1215,28 @@ class Graph
         
         void matching_rank_order() const
         {
-            std::vector<GraphElem> nbr_pes;
+            std::vector<GraphElem> nbr_pes, ng_pes;
 	    std::string outfile = "NEVE_MATCHING_MPI_RANK_ORDER." + std::to_string(size_); 
             std::vector<std::array<GraphElem,3>> send_pelist, pe_edgelist;
            
             // Build the process graph
             // -----------------------
+            
+            // get the edge weights
+            ng_pes.resize(size_, 0);
+            for (GraphElem i = 0; i < lnv_; i++)
+            {
+                GraphElem e0, e1;
+                this->edge_range(i, e0, e1);
+
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    Edge const& edge = this->get_edge(e);
+                    const int target = this->get_owner(edge.tail_);
+                    if (target != rank_)
+                        ng_pes[target] += 1; 
+                }                
+            }
 
             for (GraphElem i = 0; i < lnv_; i++)
             {
@@ -1237,31 +1253,19 @@ class Graph
                                 == nbr_pes.end())
                         {
                             nbr_pes.push_back(target);
-                            send_pelist.emplace_back(std::array<GraphElem,3>({rank_, target}));
+                            send_pelist.emplace_back(std::array<GraphElem,3>({rank_, target, ng_pes[target]}));
                         }
                     }
                 }                
             }
-            // get the edge weights
-            for (GraphElem i = 0; i < lnv_; i++)
-            {
-                GraphElem e0, e1;
-                this->edge_range(i, e0, e1);
 
-                for (GraphElem e = e0; e < e1; e++)
-                {
-                    Edge const& edge = this->get_edge(e);
-                    const int target = this->get_owner(edge.tail_);
-                    if (target != rank_)
-                        send_pelist[e][2] += 1; 
-                }                
-            }
+            ng_pes.clear();
 
             GraphElem count = send_pelist.size()*3;
             GraphElem totcount = 0;
             std::vector<int> rcounts(size_,0), displs(size_,0);
             MPI_Allreduce(&count, &totcount, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
-            MPI_Allgather(&count, 1, MPI_GRAPH_TYPE, rcounts.data(), 1, MPI_INT, comm_);
+            MPI_Allgather(&count, 1, MPI_INT, rcounts.data(), 1, MPI_INT, comm_);
             GraphElem disp = 0;
             for (int i = 0; i < size_; i++)
             {
@@ -1277,10 +1281,8 @@ class Graph
             std::vector<GraphElem> edge_count(pnv + 1, 0);
 
             for (GraphElem i = 0; i < pne; i++) 
-            {
-                edge_count[pe_edgelist[i][0]]++;
-                edge_count[pe_edgelist[i][1]]++;
-            }
+            { edge_count[pe_edgelist[i][0]+1]++; }
+
            
             // create process graph
             CSR* pg = new CSR(pnv, pne);
@@ -1299,7 +1301,17 @@ class Graph
 
             if (!std::is_sorted(pe_edgelist.begin(), pe_edgelist.end(), ecmp)) 
                 std::sort(pe_edgelist.begin(), pe_edgelist.end(), ecmp);
+#if 0
+            if (rank_ == 0)
+            {
+                std::cout << "Process graph edgelist: " << std::endl;
+                for (GraphElem k = 0; k < pe_edgelist.size(); k++)
+                    std::cout << pe_edgelist[k][0] << " ---- " << pe_edgelist[k][1] 
+                        << " ---- " << pe_edgelist[k][2] << std::endl;
+            }
 
+            MPI_Barrier(comm_);
+#endif
             GraphElem pos = 0;
             for (GraphElem i = 0; i < pnv; i++) 
             {
@@ -1325,7 +1337,10 @@ class Graph
             MaxEdgeMatching match(pg);
             match.match();
             match.flatten_M(pe_list);
+            if (rank_ == 0)
+                match.print_M();
 
+            MPI_Barrier(comm_);
             if (rank_ == 0)
             {
                 pe_map.resize(size_, 0);
@@ -1347,7 +1362,7 @@ class Graph
                 }
 
                 std::ofstream ofile;
-                ofile.open(outfile.c_str(), std::ofstream::out | std::ofstream::app);
+                ofile.open(outfile.c_str(), std::ofstream::out);
 
                 for (int p = 0; p < size_-1; p++)
                     ofile << pe_list_nodup[p] << ",";
