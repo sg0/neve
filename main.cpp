@@ -148,9 +148,9 @@ int main(int argc, char **argv)
 
     if (createRankOrder) 
     {
-	if (rankOrderType == 0)
+	if (rankOrderType == 1)
 	    g->rank_order();
-        else if (rankOrderType == 1)
+        else if (rankOrderType == 2)
 	    g->weighted_rank_order();
 	else
 	    g->matching_rank_order();

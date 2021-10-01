@@ -1114,14 +1114,11 @@ class Graph
              
             GraphElem nbr_pes_size = nbr_pes.size(), snbr_pes_size = 0;
             MPI_Reduce(&nbr_pes_size, &snbr_pes_size, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
-	    ng_pes.resize(nbr_pes_size);
-	    index.resize(nbr_pes_size);
 
+            // weights
+            ng_pes.resize(nbr_pes_size, 0);
             for (int i = 0; i < nbr_pes_size; i++)
-	    {
                 pindex.insert({nbr_pes[i], (GraphElem)i});
-		index[i] = i;
-	    }
             
 	    for (GraphElem v = 0; v < lnv_; v++)
             {
@@ -1132,13 +1129,11 @@ class Graph
                     Edge const& edge = this->get_edge(e);
                     const int owner = this->get_owner(edge.tail_); 
                     if (owner != rank_)
-                    {
                         ng_pes[pindex[owner]] += 1;
-                    }
                 }
             }
 
-	    std::sort(index.begin(), index.end(), sort_indices(ng_pes.data()));
+	    std::sort(nbr_pes.begin(), nbr_pes.end(), sort_indices(ng_pes.data()));
 
             std::vector<GraphElem> pe_list, pe_map, pe_list_nodup, pe_idx;
             std::vector<int> rcounts, rdispls;
@@ -1154,7 +1149,6 @@ class Graph
             if (rank_ == 0)
             {
                 pe_list.resize(snbr_pes_size, 0);
-                pe_idx.resize(snbr_pes_size, 0);
                 pe_map.resize(size_, 0);
                 
                 int idx = 0;
@@ -1171,18 +1165,14 @@ class Graph
                     pe_list.data(), rcounts.data(), rdispls.data(), 
                     MPI_GRAPH_TYPE, 0, comm_);
             
-	    MPI_Gatherv(index.data(), nbr_pes_size, MPI_GRAPH_TYPE, 
-                    pe_idx.data(), rcounts.data(), rdispls.data(), 
-                    MPI_GRAPH_TYPE, 0, comm_);
-            
 	    if (rank_ == 0)
             {
                 for (GraphElem x = 0; x < snbr_pes_size; x++)
                 {
-                    if (pe_map[pe_list[pe_idx[x]]] == 0)
+                    if (pe_map[pe_list[x]] == 0)
                     {
-                        pe_map[pe_list[pe_idx[x]]] = 1;
-                        pe_list_nodup.push_back(pe_list[pe_idx[x]]);
+                        pe_map[pe_list[x]] = 1;
+                        pe_list_nodup.push_back(pe_list[x]);
                     }
                 }
 
@@ -1205,7 +1195,6 @@ class Graph
             pe_list_nodup.clear();
             nbr_pes.clear();
             pe_map.clear();
-	    pe_idx.clear();
 	    ng_pes.clear();
 	    pindex.clear();
 	    index.clear();
