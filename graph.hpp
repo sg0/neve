@@ -1065,11 +1065,14 @@ class Graph
 
                 std::ofstream ofile;
                 ofile.open(outfile.c_str(), std::ofstream::out);
-
+#if defined(GEN_FUGAKU_HOSTMAP)
+                for (int p = 0; p < size_; p++)
+                    ofile << "(" << pe_list_nodup[p] << ")" << std::endl;
+#else
                 for (int p = 0; p < size_-1; p++)
                     ofile << pe_list_nodup[p] << ",";
                 ofile << pe_list_nodup[size_-1]; 
-
+#endif
                 ofile.close();
 
                 std::cout << "Rank order file: " << outfile << std::endl;
@@ -1178,11 +1181,14 @@ class Graph
 
                 std::ofstream ofile;
                 ofile.open(outfile.c_str(), std::ofstream::out);
-
+#if defined(GEN_FUGAKU_HOSTMAP)
+                for (int p = 0; p < size_; p++)
+                    ofile << "(" << pe_list_nodup[p] << ")" << std::endl;
+#else
                 for (int p = 0; p < size_-1; p++)
                     ofile << pe_list_nodup[p] << ",";
                 ofile << pe_list_nodup[size_-1]; 
-
+#endif
                 ofile.close();
 
                 std::cout << "Rank order file: " << outfile << std::endl;
@@ -1352,11 +1358,14 @@ class Graph
 
                 std::ofstream ofile;
                 ofile.open(outfile.c_str(), std::ofstream::out);
-
+#if defined(GEN_FUGAKU_HOSTMAP)
+                for (int p = 0; p < size_; p++)
+                    ofile << "(" << pe_list_nodup[p] << ")" << std::endl;
+#else
                 for (int p = 0; p < size_-1; p++)
                     ofile << pe_list_nodup[p] << ",";
                 ofile << pe_list_nodup[size_-1]; 
-
+#endif
                 ofile.close();
 
                 std::cout << "Rank order file: " << outfile << std::endl;
