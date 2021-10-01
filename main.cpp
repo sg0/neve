@@ -75,7 +75,6 @@ static bool performWorkMax = false;
 static bool performWorkSum = false;
 static bool performLTTestNbrAlltoAll = false;
 static bool performLTTestNbrAllGather = false;
-static std::string rankOrderFileName; 
 static bool createRankOrder = false;
 static int rankOrderType = 0;
 
@@ -461,12 +460,6 @@ void parseCommandLine(int argc, char** const argv)
       MPI_Abort(MPI_COMM_WORLD, -99);
   }
    
-  if (me == 0 && !generateGraph && createRankOrder && rankOrderFileName.empty()) 
-  {
-      std::cerr << "Must specify a file name with the option -o." << std::endl;
-      MPI_Abort(MPI_COMM_WORLD, -99);
-  }  
-  
   if (me == 0 && !generateGraph && randomNumberLCG) 
   {
       std::cerr << "Must specify -n for graph generation using LCG." << std::endl;
