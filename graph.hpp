@@ -58,61 +58,9 @@
 #include <mpi.h>
 #endif
 
-#include "utils.hpp"
+#include "algos.hpp"
 
 unsigned seed;
-
-#ifdef EDGE_AS_VERTEX_PAIR
-struct Edge
-{
-    GraphElem head_, tail_;
-    GraphWeight weight_;
-    
-    Edge(): head_(-1), tail_(-1), weight_(0.0) {}
-};
-#else
-struct Edge
-{
-    GraphElem tail_;
-    GraphWeight weight_;
-    
-    Edge(): tail_(-1), weight_(0.0) {}
-};
-#endif
-
-#if defined(USE_SHARED_MEMORY) && defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
-#ifndef CACHE_LINE_SIZE_BYTES
-#define CACHE_LINE_SIZE_BYTES   256
-#endif
-/* The zfill distance must be large enough to be ahead of the L2 prefetcher */
-static const int ZFILL_DISTANCE = 100;
-
-/* x-byte cache lines */
-static const int ELEMS_PER_CACHE_LINE = CACHE_LINE_SIZE_BYTES / sizeof(GraphWeight);
-
-/* Offset from a[j] to zfill */
-static const int ZFILL_OFFSET = ZFILL_DISTANCE * ELEMS_PER_CACHE_LINE;
-
-static inline void zfill(GraphWeight * a) 
-{ asm volatile("dc zva, %0": : "r"(a)); }
-#endif
-
-struct EdgeTuple
-{
-    GraphElem ij_[2];
-    GraphWeight w_;
-
-    EdgeTuple(GraphElem i, GraphElem j, GraphWeight w): 
-        ij_{i, j}, w_(w)
-    {}
-    EdgeTuple(GraphElem i, GraphElem j): 
-        ij_{i, j}, w_(1.0) 
-    {}
-    EdgeTuple(): 
-        ij_{-1, -1}, w_(0.0)
-    {}
-};
-
 
 #if defined(USE_SHARED_MEMORY)
 class Graph
@@ -1045,7 +993,8 @@ class Graph
                 std::cout << "-------------------------------------------------------" << std::endl;
             }
         }
-         
+
+        // Rank order
         void rank_order() const
         {
             std::vector<GraphElem> nbr_pes;
@@ -1263,6 +1212,165 @@ class Graph
             rcounts.clear();
             rdispls.clear();
         }
+        
+        void matching_rank_order() const
+        {
+            std::vector<GraphElem> nbr_pes;
+	    std::string outfile = "NEVE_MATCHING_MPI_RANK_ORDER." + std::to_string(size_); 
+            std::vector<std::array<GraphElem,3>> send_pelist, pe_edgelist;
+           
+            // Build the process graph
+            // -----------------------
+
+            for (GraphElem i = 0; i < lnv_; i++)
+            {
+                GraphElem e0, e1;
+                this->edge_range(i, e0, e1);
+
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    Edge const& edge = this->get_edge(e);
+                    const int target = this->get_owner(edge.tail_);
+                    if (target != rank_)
+                    {
+                        if (std::find(nbr_pes.begin(), nbr_pes.end(), target) 
+                                == nbr_pes.end())
+                        {
+                            nbr_pes.push_back(target);
+                            send_pelist.emplace_back(std::array<GraphElem,3>({rank_, target}));
+                        }
+                    }
+                }                
+            }
+            // get the edge weights
+            for (GraphElem i = 0; i < lnv_; i++)
+            {
+                GraphElem e0, e1;
+                this->edge_range(i, e0, e1);
+
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    Edge const& edge = this->get_edge(e);
+                    const int target = this->get_owner(edge.tail_);
+                    if (target != rank_)
+                        send_pelist[e][2] += 1; 
+                }                
+            }
+
+            GraphElem count = send_pelist.size()*3;
+            GraphElem totcount = 0;
+            std::vector<int> rcounts(size_,0), displs(size_,0);
+            MPI_Allreduce(&count, &totcount, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
+            MPI_Allgather(&count, 1, MPI_GRAPH_TYPE, rcounts.data(), 1, MPI_INT, comm_);
+            GraphElem disp = 0;
+            for (int i = 0; i < size_; i++)
+            {
+                displs[i] = disp;
+                disp += rcounts[i];
+            }
+            pe_edgelist.resize(totcount/3);
+            MPI_Allgatherv(send_pelist.data(), count, MPI_GRAPH_TYPE, pe_edgelist.data(), 
+                    rcounts.data(), displs.data(), MPI_GRAPH_TYPE, comm_);
+
+            const GraphElem pnv = size_;
+            const GraphElem pne = pe_edgelist.size();
+            std::vector<GraphElem> edge_count(pnv + 1, 0);
+
+            for (GraphElem i = 0; i < pne; i++) 
+            {
+                edge_count[pe_edgelist[i][0]]++;
+                edge_count[pe_edgelist[i][1]]++;
+            }
+           
+            // create process graph
+            CSR* pg = new CSR(pnv, pne);
+            std::vector<GraphElem> ec_tmp(pnv + 1);
+            
+            std::partial_sum(edge_count.begin(), edge_count.end(), ec_tmp.begin());
+            edge_count = ec_tmp;
+            
+            pg->edge_indices_[0] = 0;
+            for (GraphElem i = 0; i < pnv; i++)
+                pg->edge_indices_[i+1] = edge_count[i+1];
+            edge_count.clear();
+
+            auto ecmp = [](std::array<GraphElem,3> const& e0, std::array<GraphElem,3> const& e1)
+            { return ((e0[0] < e1[0]) || ((e0[0] == e1[0]) && (e0[1] < e1[1]))); };
+
+            if (!std::is_sorted(pe_edgelist.begin(), pe_edgelist.end(), ecmp)) 
+                std::sort(pe_edgelist.begin(), pe_edgelist.end(), ecmp);
+
+            GraphElem pos = 0;
+            for (GraphElem i = 0; i < pnv; i++) 
+            {
+                GraphElem e0, e1;
+                pg->edge_range(i, e0, e1);
+
+                for (GraphElem j = e0; j < e1; j++) 
+                {
+                    Edge &edge = pg->get_edge(j);
+
+                    assert(pos == j);
+                    assert(i == pe_edgelist[pos][0]);
+
+                    edge.tail_ = pe_edgelist[pos][1];
+                    edge.weight_ = (GraphWeight)(pe_edgelist[pos][2]);
+
+                    pos++;
+                }
+            }
+
+            // Invoke matching on weighted process graph, pg
+            std::vector<GraphElem> pe_list, pe_map, pe_list_nodup;
+            MaxEdgeMatching match(pg);
+            match.match();
+            match.flatten_M(pe_list);
+
+            if (rank_ == 0)
+            {
+                pe_map.resize(size_, 0);
+
+                for (GraphElem x = 0; x < pe_list.size(); x++)
+                {
+                    if (pe_map[pe_list[x]] == 0)
+                    {
+                        pe_map[pe_list[x]] = 1;
+                        pe_list_nodup.push_back(pe_list[x]);
+                    }
+                }
+                
+                // get the remaining if any
+                for (GraphElem r = 0; r < size_; r++)
+                {
+                    if (pe_map[r] == 0)
+                        pe_list_nodup.push_back(r);
+                }
+
+                std::ofstream ofile;
+                ofile.open(outfile.c_str(), std::ofstream::out | std::ofstream::app);
+
+                for (int p = 0; p < size_-1; p++)
+                    ofile << pe_list_nodup[p] << ",";
+                ofile << pe_list_nodup[size_-1]; 
+
+                ofile.close();
+
+                std::cout << "Rank order file: " << outfile << std::endl;
+                std::cout << "-------------------------------------------------------" << std::endl;
+            }
+            
+            MPI_Barrier(comm_);
+
+            pe_edgelist.clear();
+            send_pelist.clear();
+            edge_count.clear();
+            pe_list.clear();
+            pe_list_nodup.clear();
+            nbr_pes.clear();
+            pe_map.clear();
+            rcounts.clear();
+            displs.clear();
+        }
 
         // public variables
         std::vector<GraphElem> edge_indices_;
@@ -1275,6 +1383,8 @@ class Graph
         MPI_Comm comm_; 
         int rank_, size_;
 };
+
+
 
 // read in binary edge list files
 // using MPI I/O

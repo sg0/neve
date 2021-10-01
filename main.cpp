@@ -151,8 +151,10 @@ int main(int argc, char **argv)
     {
 	if (rankOrderType == 0)
 	    g->rank_order();
-	else
+        else if (rankOrderType == 1)
 	    g->weighted_rank_order();
+	else
+	    g->matching_rank_order();
     }
 
     MPI_Barrier(MPI_COMM_WORLD);

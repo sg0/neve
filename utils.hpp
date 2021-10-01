@@ -113,6 +113,57 @@ const MPI_Datatype MPI_WEIGHT_TYPE = MPI_DOUBLE;
 
 extern unsigned seed;
 
+#ifdef EDGE_AS_VERTEX_PAIR
+struct Edge
+{
+    GraphElem head_, tail_;
+    GraphWeight weight_;
+    
+    Edge(): head_(-1), tail_(-1), weight_(0.0) {}
+};
+#else
+struct Edge
+{
+    GraphElem tail_;
+    GraphWeight weight_;
+    
+    Edge(): tail_(-1), weight_(0.0) {}
+};
+#endif
+
+#if defined(USE_SHARED_MEMORY) && defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+#ifndef CACHE_LINE_SIZE_BYTES
+#define CACHE_LINE_SIZE_BYTES   256
+#endif
+/* The zfill distance must be large enough to be ahead of the L2 prefetcher */
+static const int ZFILL_DISTANCE = 100;
+
+/* x-byte cache lines */
+static const int ELEMS_PER_CACHE_LINE = CACHE_LINE_SIZE_BYTES / sizeof(GraphWeight);
+
+/* Offset from a[j] to zfill */
+static const int ZFILL_OFFSET = ZFILL_DISTANCE * ELEMS_PER_CACHE_LINE;
+
+static inline void zfill(GraphWeight * a) 
+{ asm volatile("dc zva, %0": : "r"(a)); }
+#endif
+
+struct EdgeTuple
+{
+    GraphElem ij_[2];
+    GraphWeight w_;
+
+    EdgeTuple(GraphElem i, GraphElem j, GraphWeight w): 
+        ij_{i, j}, w_(w)
+    {}
+    EdgeTuple(GraphElem i, GraphElem j): 
+        ij_{i, j}, w_(1.0) 
+    {}
+    EdgeTuple(): 
+        ij_{-1, -1}, w_(0.0)
+    {}
+};
+
 // Is nprocs a power-of-2?
 int is_pwr2(int pes) 
 { return ((pes != 0) && !(pes & (pes - 1))); }
@@ -154,6 +205,45 @@ class sort_indices
    
    private:
      GraphElem* ptr_;
+};
+
+// CSR for shared-memory/serial implementations
+class CSR
+{
+    public:
+        CSR(GraphElem nv, GraphElem ne): 
+            nv_(nv), ne_(ne) 
+        {
+            edge_indices_ = new GraphElem[nv_+1];
+            edge_list_    = new Edge[ne_];
+        }
+
+        ~CSR() 
+        {
+            delete []edge_indices_;
+            delete []edge_list_;
+        }
+        
+        void edge_range(GraphElem const vertex, GraphElem& e0, 
+                GraphElem& e1) const
+        {
+            e0 = edge_indices_[vertex];
+            e1 = edge_indices_[vertex+1];
+        } 
+
+        GraphElem get_nv() const { return nv_; }
+        GraphElem get_ne() const { return ne_; }
+       
+        Edge const& get_edge(GraphElem const index) const
+        { return edge_list_[index]; }
+         
+        Edge& get_edge(GraphElem const index)
+        { return edge_list_[index]; }        
+        
+        GraphElem *edge_indices_;
+        Edge *edge_list_;        
+    private:
+        GraphElem nv_, ne_;
 };
 
 // Parallel Linear Congruential Generator
