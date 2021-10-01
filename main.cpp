@@ -148,12 +148,18 @@ int main(int argc, char **argv)
 
     if (createRankOrder) 
     {
-	if (rankOrderType == 1)
-	    g->rank_order();
+        t0 = MPI_Wtime();
+        if (rankOrderType == 1)
+            g->rank_order();
         else if (rankOrderType == 2)
-	    g->weighted_rank_order();
-	else
-	    g->matching_rank_order();
+            g->weighted_rank_order();
+        else
+            g->matching_rank_order();
+        t1 = MPI_Wtime() - t0;
+        double tr = 0.0;
+        MPI_Reduce(&t1, &tr, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+        if (me == 0) 
+            std::cout << "Time to create rank order file (in s): " << tr << std::endl;
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
