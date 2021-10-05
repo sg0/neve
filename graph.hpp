@@ -1182,6 +1182,7 @@ class Graph
                 std::ofstream ofile;
                 ofile.open(outfile.c_str(), std::ofstream::out);
 #if defined(GEN_FUGAKU_HOSTMAP)
+#error GEN_FUGAKU_HOSTMAP implementation is currently wrong. 
                 for (int p = 0; p < size_; p++)
                     ofile << "(" << pe_list_nodup[p] << ")" << std::endl;
 #else
