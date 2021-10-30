@@ -998,7 +998,7 @@ class Graph
         void rank_order() const
         {
             std::vector<GraphElem> nbr_pes;
-	    std::string outfile = "NEVE_MPI_RANK_ORDER." + std::to_string(size_); 
+	          std::string outfile = "NEVE_MPI_RANK_ORDER." + std::to_string(size_); 
 
             for (GraphElem v = 0; v < lnv_; v++)
             {
@@ -1035,7 +1035,6 @@ class Graph
 
             if (rank_ == 0)
             {
-                pe_list.resize(snbr_pes_size, 0);
                 pe_map.resize(size_, 0);
                 
                 int idx = 0;
@@ -1044,6 +1043,8 @@ class Graph
                     rdispls[i] = idx;
                     idx += rcounts[i];
                 }
+                
+                pe_list.resize(idx, 0);
             }
 
             MPI_Barrier(comm_);
@@ -1054,7 +1055,7 @@ class Graph
 
             if (rank_ == 0)
             {
-                for (GraphElem x = 0; x < snbr_pes_size; x++)
+                for (GraphElem x = 0; x < pe_list.size(); x++)
                 {
                     if (pe_map[pe_list[x]] == 0)
                     {
@@ -1062,6 +1063,15 @@ class Graph
                         pe_list_nodup.push_back(pe_list[x]);
                     }
                 }
+
+                // isolated nodes
+                for (int p = 0; p < size_; p++)
+                {
+                  if (pe_map[p] == 0)
+                        pe_list_nodup.push_back(p);
+                }
+
+                assert(pe_list_nodup.size() == size_);
 
                 std::ofstream ofile;
                 ofile.open(outfile.c_str(), std::ofstream::out);
@@ -1089,12 +1099,12 @@ class Graph
             rdispls.clear();
         }
         
-	void weighted_rank_order() const
+	      void weighted_rank_order() const
         {
             std::vector<GraphElem> nbr_pes;
             std::vector<GraphElem> ng_pes, index;
-	    std::unordered_map<int, GraphElem> pindex;
-	    std::string outfile = "NEVE_WEIGHTED_MPI_RANK_ORDER." + std::to_string(size_); 
+	          std::unordered_map<int, GraphElem> pindex;
+	          std::string outfile = "NEVE_WEIGHTED_MPI_RANK_ORDER." + std::to_string(size_); 
 
             for (GraphElem v = 0; v < lnv_; v++)
             {
@@ -1123,7 +1133,7 @@ class Graph
             for (int i = 0; i < nbr_pes_size; i++)
                 pindex.insert({nbr_pes[i], (GraphElem)i});
             
-	    for (GraphElem v = 0; v < lnv_; v++)
+	          for (GraphElem v = 0; v < lnv_; v++)
             {
                 GraphElem e0, e1;
                 this->edge_range(v, e0, e1);
@@ -1136,7 +1146,7 @@ class Graph
                 }
             }
 
-	    std::sort(nbr_pes.begin(), nbr_pes.end(), sort_indices(ng_pes.data()));
+	          std::sort(nbr_pes.begin(), nbr_pes.end(), sort_indices(ng_pes.data()));
 
             std::vector<GraphElem> pe_list, pe_map, pe_list_nodup, pe_idx;
             std::vector<int> rcounts, rdispls;
@@ -1151,7 +1161,6 @@ class Graph
 
             if (rank_ == 0)
             {
-                pe_list.resize(snbr_pes_size, 0);
                 pe_map.resize(size_, 0);
                 
                 int idx = 0;
@@ -1160,6 +1169,8 @@ class Graph
                     rdispls[i] = idx;
                     idx += rcounts[i];
                 }
+                
+                pe_list.resize(idx, 0);
             }
 
             MPI_Barrier(comm_);
@@ -1168,9 +1179,9 @@ class Graph
                     pe_list.data(), rcounts.data(), rdispls.data(), 
                     MPI_GRAPH_TYPE, 0, comm_);
             
-	    if (rank_ == 0)
+	          if (rank_ == 0)
             {
-                for (GraphElem x = 0; x < snbr_pes_size; x++)
+                for (GraphElem x = 0; x < pe_list.size(); x++)
                 {
                     if (pe_map[pe_list[x]] == 0)
                     {
@@ -1178,6 +1189,15 @@ class Graph
                         pe_list_nodup.push_back(pe_list[x]);
                     }
                 }
+                
+                // isolated nodes
+                for (int p = 0; p < size_; p++)
+                {
+                  if (pe_map[p] == 0)
+                        pe_list_nodup.push_back(p);
+                }
+
+                assert(pe_list_nodup.size() == size_);
 
                 std::ofstream ofile;
                 ofile.open(outfile.c_str(), std::ofstream::out);
@@ -1201,9 +1221,9 @@ class Graph
             pe_list_nodup.clear();
             nbr_pes.clear();
             pe_map.clear();
-	    ng_pes.clear();
-	    pindex.clear();
-	    index.clear();
+	          ng_pes.clear();
+	          pindex.clear();
+	          index.clear();
             rcounts.clear();
             rdispls.clear();
         }
@@ -1211,7 +1231,7 @@ class Graph
         void matching_rank_order() const
         {
             std::vector<GraphElem> nbr_pes, ng_pes;
-	    std::string outfile = "NEVE_MATCHING_MPI_RANK_ORDER." + std::to_string(size_); 
+	          std::string outfile = "NEVE_MATCHING_MPI_RANK_ORDER." + std::to_string(size_); 
             std::vector<std::array<GraphElem,3>> send_pelist, pe_edgelist;
            
             // Build the process graph
