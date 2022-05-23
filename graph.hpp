@@ -1353,8 +1353,10 @@ class Graph
             MaxEdgeMatching match(pg);
             match.match();
             match.flatten_M(pe_list);
+#if defined(PRINT_MATCHED_EDGES)
             if (rank_ == 0)
                 match.print_M();
+#endif
 
             MPI_Barrier(comm_);
             if (rank_ == 0)
