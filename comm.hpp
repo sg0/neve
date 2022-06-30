@@ -66,6 +66,8 @@
 #define LT_LOOP_COUNT_LARGE     1000
 #define LT_SKIP_COUNT_LARGE     10
 
+#define TEST_LT_MPI_RMA
+
 class Comm
 {
     public:
@@ -149,6 +151,8 @@ class Comm
             assert(out_nghosts_ >= outdegree_); \
             sreq_ = new MPI_Request[out_nghosts_]; \
             rreq_ = new MPI_Request[in_nghosts_]; \
+		  MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
+		      comm_, &rbuf2_, &window); \
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
 	    if (lne > 1000) \
             { \
@@ -476,7 +480,24 @@ class Comm
             MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
             MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
         }
-       
+
+#if defined(TEST_LT_MPI_RMA)
+		inline void comm_kernel_lt_rma(GraphElem const& size)
+		{
+//			MPI_Win_fence(0, window);
+			for (int p = 0; p < outdegree_; p++)
+			{
+//				MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
+				MPI_Rput(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
+			}
+//			MPI_Win_fence(0, window);
+			MPI_Win_flush_all(window);
+		}
+		
+		inline void comm_kernel_lt_rma(GraphElem const& size, GraphElem const& npairs, 
+                MPI_Comm gcomm, int const& me){}
+#endif
+
 #if defined(TEST_LT_MPI_PROC_NULL) 
 	// same as above, but replaces target with MPI_PROC_NULL to 
         // measure software overhead
@@ -677,6 +698,12 @@ class Comm
             MPI_Waitall(avg_ng*(npairs-1), sreq_, MPI_STATUSES_IGNORE);
         }
 
+#if defined(TEST_LT_MPI_RMA)
+        inline void comm_kernel_bw_rma(GraphElem const& size){}
+        inline void comm_kernel_bw_rma(GraphElem const& size, GraphElem const& npairs, 
+            MPI_Comm gcomm, GraphElem const& avg_ng, int const& me){}
+#endif
+
         // Bandwidth tests
         void p2p_bw()
         {
@@ -728,8 +755,12 @@ class Comm
                         MPI_Barrier(comm_);
                         t_start = MPI_Wtime();
                     }
-
+#if defined(TEST_LT_MPI_RMA)
+//                    comm_kernel_bw_rma(size);
                     comm_kernel_bw(size);
+#else
+                    comm_kernel_bw(size);
+#endif				
                 }   
 
 #if defined(SCOREP_USER_ENABLE)
@@ -803,7 +834,12 @@ class Comm
 
                 t_start = MPI_Wtime();
 
-                comm_kernel_bw(size);
+#if defined(TEST_LT_MPI_RMA)
+//                    comm_kernel_bw_rma(size);
+                    comm_kernel_bw(size);
+#else
+                    comm_kernel_bw(size);
+#endif
 
                 t_end = MPI_Wtime();
                 t = t_end - t_start;
@@ -892,6 +928,8 @@ class Comm
                     
 #if defined(TEST_LT_MPI_PROC_NULL) 
                     comm_kernel_lt_pnull(size);
+#elif defined(TEST_LT_MPI_RMA)
+                    comm_kernel_lt_rma(size);
 #else
                     comm_kernel_lt(size);
 #endif
@@ -1498,8 +1536,12 @@ class Comm
                             MPI_Barrier(nbr_comm);
                             t_start = MPI_Wtime();
                         }
-        
-                        comm_kernel_bw(size, tgt_deg+1, nbr_comm, avg_ng, tgt_rank);
+#if defined(TEST_LT_MPI_RMA)
+//                    comm_kernel_bw_rma(size, tgt_deg+1, nbr_comm, avg_ng, tgt_rank);
+                    comm_kernel_bw(size, tgt_deg+1, nbr_comm, avg_ng, tgt_rank);
+#else
+                    comm_kernel_bw(size, tgt_deg+1, nbr_comm, avg_ng, tgt_rank);
+#endif
                     }   
 
                     t_end = MPI_Wtime();
@@ -1620,8 +1662,12 @@ class Comm
                             t_start = MPI_Wtime();
 			    MPI_Barrier(nbr_comm);
                         }
-                        
+#if defined(TEST_LT_MPI_RMA)                        
+                        //comm_kernel_lt_rma(size, tgt_deg+1, nbr_comm, tgt_rank);
+				    comm_kernel_lt(size, tgt_deg+1, nbr_comm, tgt_rank);
+#else
                         comm_kernel_lt(size, tgt_deg+1, nbr_comm, tgt_rank);
+#endif				    
                     }   
 
                     t_end = MPI_Wtime();
@@ -1678,6 +1724,8 @@ class Comm
 
         char *sbuf_, *rbuf_;
         MPI_Request *sreq_, *rreq_;
+	   char *rbuf2_;
+        MPI_Win window;
 
         // ranges
         GraphElem max_size_, min_size_, large_msg_size_;
