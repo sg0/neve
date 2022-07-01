@@ -484,14 +484,15 @@ class Comm
 #if defined(TEST_LT_MPI_RMA)
 		inline void comm_kernel_lt_rma(GraphElem const& size)
 		{
-//			MPI_Win_fence(0, window);
+			MPI_Win_fence(0, window);
 			for (int p = 0; p < outdegree_; p++)
 			{
 //				MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
 				MPI_Rput(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
 			}
-//			MPI_Win_fence(0, window);
-			MPI_Win_flush_all(window);
+			MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+			MPI_Win_fence(0, window);
+//			MPI_Win_flush_all(window);
 		}
 		
 		inline void comm_kernel_lt_rma(GraphElem const& size, GraphElem const& npairs, 
@@ -699,7 +700,27 @@ class Comm
         }
 
 #if defined(TEST_LT_MPI_RMA)
-        inline void comm_kernel_bw_rma(GraphElem const& size){}
+        inline void comm_kernel_bw_rma(GraphElem const& size){
+            printf("hello!");
+            GraphElem rng = 0, sng = 0;            // sends
+            
+            MPI_Win_fence(0, window);
+            for (int p = 0; p < outdegree_; p++)
+            {
+                for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
+                {
+//                    MPI_Isend(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], g, comm_, sreq_+ sng);
+                    MPI_Rput(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_+ sng);
+                    
+//                    MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
+//                    MPI_Rput(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
+                    sng++;
+                }
+            }
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+            MPI_Win_fence(0, window);
+        }
+	   
         inline void comm_kernel_bw_rma(GraphElem const& size, GraphElem const& npairs, 
             MPI_Comm gcomm, GraphElem const& avg_ng, int const& me){}
 #endif
@@ -756,8 +777,7 @@ class Comm
                         t_start = MPI_Wtime();
                     }
 #if defined(TEST_LT_MPI_RMA)
-//                    comm_kernel_bw_rma(size);
-                    comm_kernel_bw(size);
+                    comm_kernel_bw_rma(size);
 #else
                     comm_kernel_bw(size);
 #endif				
@@ -835,8 +855,8 @@ class Comm
                 t_start = MPI_Wtime();
 
 #if defined(TEST_LT_MPI_RMA)
-//                    comm_kernel_bw_rma(size);
-                    comm_kernel_bw(size);
+                    comm_kernel_bw_rma(size);
+//                    comm_kernel_bw(size);
 #else
                     comm_kernel_bw(size);
 #endif
