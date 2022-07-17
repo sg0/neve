@@ -70,11 +70,15 @@ static bool fallAsleep = false;
 
 static int lttOption = 0, performWork = 0;
 static bool performBWTest = false;
+static bool performBWTestRMA = false;
 static bool performLTTest = false;
 static bool performWorkMax = false;
 static bool performWorkSum = false;
 static bool performLTTestNbrAlltoAll = false;
 static bool performLTTestNbrAllGather = false;
+static bool performLTTestRMA_Rput = false;
+static bool performLTTestRMA_Rget = false;
+static bool performLTTestRMA_Raccumulate = false;
 static bool createRankOrder = false;
 static int rankOrderType = 0;
 
@@ -180,7 +184,7 @@ int main(int argc, char **argv)
                 << nvRGG << " vertices (in s): " << tdt << std::endl;
     }
     
-    if (performBWTest || performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather)
+    if (performBWTest || performBWTestRMA || performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather || performLTTestRMA_Rput || performLTTestRMA_Rget || performLTTestRMA_Raccumulate)
     {
         // Comm object can be instantiated
         // with iteration ranges and other 
@@ -214,14 +218,20 @@ int main(int argc, char **argv)
             else
             {
                 if (hardSkip)
-                    c.p2p_bw_hardskip();
+                    c.p2p_bw_hardskip(0);
                 else
-                    c.p2p_bw();
+                    c.p2p_bw(0);
             }
+        } else if (performBWTestRMA) 
+        {
+            if (hardSkip)
+                c.p2p_bw_hardskip(1);
+            else
+                c.p2p_bw(1);
         }
 
         // latency tests
-        if (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather)
+        if (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather || performLTTestRMA_Rput || performLTTestRMA_Rget || performLTTestRMA_Raccumulate)
         {
             if (performLTTest) 
             {
@@ -251,7 +261,8 @@ int main(int argc, char **argv)
                         c.p2p_lt_workmax();
                     }
                     else
-                        c.p2p_lt();
+                        // run p2p_lt using nonblocking send/recv kernel
+                        c.p2p_lt(0);
                 }
             }
 
@@ -296,7 +307,24 @@ int main(int argc, char **argv)
 #endif
                 }
             }
+            
+            if (performLTTestRMA_Rput)
+            {
+                // run p2p_lt using RMA Rput
+                c.p2p_lt(3);
+            }
+		  if (performLTTestRMA_Rget)
+            {
+                // run p2p_lt using RMA Rput
+                c.p2p_lt(4);
+            }
+		  if (performLTTestRMA_Raccumulate)
+            {
+                // run p2p_lt using RMA Rput
+                c.p2p_lt(5);
+            }
         }
+
 
         MPI_Barrier(MPI_COMM_WORLD);
         t1 = MPI_Wtime();
@@ -328,7 +356,7 @@ void parseCommandLine(int argc, char** const argv)
   int ret;
   optind = 1;
 
-  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:ud:o:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:w:s:z:ud:o:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -360,16 +388,36 @@ void parseCommandLine(int argc, char** const argv)
       maxNumGhosts = atol(optarg);
       break;
     case 'w':
-      performBWTest = true;
+      lttOption = atoi(optarg);
+      if (lttOption == 0)
+          // use nonblocking Send/Recv
+          performBWTest = true;
+      else if (lttOption == 1)
+          // use MPI_Neighbor_alltoall
+          performBWTestRMA = true;
+      else
+          performBWTest = true;
       break;
     case 't':
       lttOption = atoi(optarg);
       if (lttOption == 0)
+          // use nonblocking Send/Recv
           performLTTest = true;
       else if (lttOption == 1)
+          // use MPI_Neighbor_alltoall
           performLTTestNbrAlltoAll = true;
       else if (lttOption == 2)
+          // use MPI_Neighbor_allgather
           performLTTestNbrAllGather = true;
+      else if (lttOption == 3)
+          // use MPI RMA with Rput
+          performLTTestRMA_Rput = true;
+      else if (lttOption == 4)
+          // use MPI RMA with Rget
+          performLTTestRMA_Rget = true;
+      else if (lttOption == 5)
+          // use MPI RMA with Raccumulate
+          performLTTestRMA_Raccumulate = true;
       else
           performLTTest = true;
       break;
@@ -405,7 +453,7 @@ void parseCommandLine(int argc, char** const argv)
   }
 
   // warnings/info
-  if (me == 0 && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather) && maxNumGhosts) 
+  if (me == 0 && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather || performLTTestRMA_Rput || performLTTestRMA_Rget || performLTTestRMA_Raccumulate) && maxNumGhosts) 
   {
       std::cout << "Setting the number of ghost vertices (-g <...>) has no effect for latency test."
           << std::endl;
@@ -428,12 +476,12 @@ void parseCommandLine(int argc, char** const argv)
       std::cout << "Graph shrinking (option -z) must be greater than 0.0. " << std::endl;
   }
 
-  if (me == 0 && shrinkGraph && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather))
+  if (me == 0 && shrinkGraph && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather || performLTTestRMA_Rput || performLTTestRMA_Rget || performLTTestRMA_Raccumulate))
   {
 	  std::cout << "Graph shrinking is ONLY valid for bandwidth test, NOT latency test which just performs message exchanges across the process neighborhood of a graph." << std::endl;	  
   }
 
-  if (me == 0 && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather) && hardSkip)
+  if (me == 0 && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather || performLTTestRMA_Rput || performLTTestRMA_Rget || performLTTestRMA_Raccumulate) && hardSkip)
   {
       std::cout << "The hard skip option to disable warmup and extra communication loops only affects the bandwidth test." << std::endl;
   }

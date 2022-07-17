@@ -66,7 +66,8 @@
 #define LT_LOOP_COUNT_LARGE     1000
 #define LT_SKIP_COUNT_LARGE     10
 
-#define TEST_LT_MPI_RMA
+#define TEST_MPI_RMA
+#define BW_RMA_USE_RPUT
 
 class Comm
 {
@@ -481,23 +482,41 @@ class Comm
             MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
         }
 
-#if defined(TEST_LT_MPI_RMA)
-		inline void comm_kernel_lt_rma(GraphElem const& size)
+		inline void comm_kernel_lt_rma_rput(GraphElem const& size)
 		{
 			MPI_Win_fence(0, window);
 			for (int p = 0; p < outdegree_; p++)
 			{
-//				MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
 				MPI_Rput(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
 			}
 			MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
 			MPI_Win_fence(0, window);
-//			MPI_Win_flush_all(window);
+		}
+        
+        inline void comm_kernel_lt_rma_rget(GraphElem const& size)
+		{
+			MPI_Win_fence(0, window);
+			for (int p = 0; p < outdegree_; p++)
+			{
+				MPI_Rget(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
+			}
+			MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+			MPI_Win_fence(0, window);
+		}
+        
+        inline void comm_kernel_lt_rma_raccumulate(GraphElem const& size)
+		{
+			MPI_Win_fence(0, window);
+			for (int p = 0; p < outdegree_; p++)
+			{
+                MPI_Raccumulate(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, MPI_REPLACE, window, sreq_ + p);
+			}
+			MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+			MPI_Win_fence(0, window);
 		}
 		
 		inline void comm_kernel_lt_rma(GraphElem const& size, GraphElem const& npairs, 
                 MPI_Comm gcomm, int const& me){}
-#endif
 
 #if defined(TEST_LT_MPI_PROC_NULL) 
 	// same as above, but replaces target with MPI_PROC_NULL to 
@@ -699,9 +718,8 @@ class Comm
             MPI_Waitall(avg_ng*(npairs-1), sreq_, MPI_STATUSES_IGNORE);
         }
 
-#if defined(TEST_LT_MPI_RMA)
+#if defined(TEST_MPI_RMA)
         inline void comm_kernel_bw_rma(GraphElem const& size){
-            printf("hello!");
             GraphElem rng = 0, sng = 0;            // sends
             
             MPI_Win_fence(0, window);
@@ -709,11 +727,13 @@ class Comm
             {
                 for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
                 {
-//                    MPI_Isend(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], g, comm_, sreq_+ sng);
+                    #if defined(BW_RMA_USE_RPUT)
                     MPI_Rput(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_+ sng);
-                    
-//                    MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
-//                    MPI_Rput(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
+                    #elif defined(BW_RMA_USE_RGET)
+                    MPI_Rget(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_+ sng);
+                    #elif defined(BW_RMA_USE_RACCUMULATE)
+                    MPI_Raccumulate(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, MPI_REPLACE, window, sreq_+ sng);
+                    #endif
                     sng++;
                 }
             }
@@ -726,7 +746,7 @@ class Comm
 #endif
 
         // Bandwidth tests
-        void p2p_bw()
+        void p2p_bw(int type)
         {
             double t, t_start, t_end, sum_t = 0.0;
             int loop = bw_loop_count_, skip = bw_skip_count_;
@@ -776,11 +796,15 @@ class Comm
                         MPI_Barrier(comm_);
                         t_start = MPI_Wtime();
                     }
-#if defined(TEST_LT_MPI_RMA)
-                    comm_kernel_bw_rma(size);
-#else
-                    comm_kernel_bw(size);
-#endif				
+                    switch (type)
+                    {
+                        case 0:
+                            comm_kernel_bw(size);
+                            break;
+                        case 1:
+                            comm_kernel_bw_rma(size);
+                            break;
+                    }
                 }   
 
 #if defined(SCOREP_USER_ENABLE)
@@ -818,7 +842,7 @@ class Comm
         }
          
         // no extra loop, just communication among ghosts
-        void p2p_bw_hardskip()
+        void p2p_bw_hardskip(int type)
         {
             double t, t_start, t_end, sum_t = 0.0;
             
@@ -853,13 +877,16 @@ class Comm
                 MPI_Barrier(comm_);
 
                 t_start = MPI_Wtime();
-
-#if defined(TEST_LT_MPI_RMA)
-                    comm_kernel_bw_rma(size);
-//                    comm_kernel_bw(size);
-#else
-                    comm_kernel_bw(size);
-#endif
+            
+                switch (type) 
+                {
+                    case 0:
+                        comm_kernel_bw(size);
+                        break;
+                    case 1:
+                        comm_kernel_bw_rma(size);
+                        break;
+                }
 
                 t_end = MPI_Wtime();
                 t = t_end - t_start;
@@ -893,7 +920,7 @@ class Comm
         }
         
         // Latency test using MPI Isend/Irecv
-        void p2p_lt()
+        void p2p_lt(int type)
         {
             double t, t_start, t_end, sum_t = 0.0;
             int loop = lt_loop_count_, skip = lt_skip_count_;
@@ -948,10 +975,22 @@ class Comm
                     
 #if defined(TEST_LT_MPI_PROC_NULL) 
                     comm_kernel_lt_pnull(size);
-#elif defined(TEST_LT_MPI_RMA)
-                    comm_kernel_lt_rma(size);
 #else
-                    comm_kernel_lt(size);
+                    switch (type) {
+                        case 0:
+                            comm_kernel_lt(size);
+                            break;
+                        case 3:
+                            comm_kernel_lt_rma_rput(size);
+                            break;
+                        case 4:
+                            comm_kernel_lt_rma_rget(size);
+                            break;
+                        case 5:
+                            comm_kernel_lt_rma_raccumulate(size);
+                            break;
+                        
+                    }
 #endif
                 }
 
@@ -1556,7 +1595,7 @@ class Comm
                             MPI_Barrier(nbr_comm);
                             t_start = MPI_Wtime();
                         }
-#if defined(TEST_LT_MPI_RMA)
+#if defined(TEST_MPI_RMA)
 //                    comm_kernel_bw_rma(size, tgt_deg+1, nbr_comm, avg_ng, tgt_rank);
                     comm_kernel_bw(size, tgt_deg+1, nbr_comm, avg_ng, tgt_rank);
 #else
@@ -1682,7 +1721,7 @@ class Comm
                             t_start = MPI_Wtime();
 			    MPI_Barrier(nbr_comm);
                         }
-#if defined(TEST_LT_MPI_RMA)                        
+#if defined(TEST_MPI_RMA)                        
                         //comm_kernel_lt_rma(size, tgt_deg+1, nbr_comm, tgt_rank);
 				    comm_kernel_lt(size, tgt_deg+1, nbr_comm, tgt_rank);
 #else

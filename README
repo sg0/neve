@@ -150,9 +150,16 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
 6.  -r <nranks>     : This is used to control the number of aggregators in MPI I/O and is
                       meaningful when an input binary graph file is passed with option "-f".
                       naggr := (nranks > 1) ? (nprocs/nranks) : nranks;
-7   -w              : Report Bandwidth in MB/s[*].
-8.  -t <0|1|2>      : Report Latency in microseconds[*]. Option '0' uses nonblocking Send/Recv, 
-                      Option '1' uses MPI_Neighbor_alltoall and Option '2' uses MPI_Neighbor_allgather.
+7   -w <protocol>   : Report Bandwidth in MB/s[*]. protocol can be any of
+                      0: Nonblocking send/recv (default if protocol unspecified)
+                      1: MPI RMA with communication function determined by macro definitions
+8.  -t <protocol>   : Report Latency in microseconds[*]. protocol can be any of
+                      0: Nonblocking send/recv (default if protocol unspecified)
+                      1: MPI_Neighbor_alltoall
+                      2: MPI_Neighbor_allgather
+                      3: MPI RMA with MPI_Rput
+                      4: MPI RMA with MPI_Rget
+                      5: MPI RMA with MPI_Raccumulate
 9.  -x <bytes>      : Maximum data exchange size (in bytes).
 10. -m <bytes>      : Minimum data exchange size (in bytes).
 11. -d <0|1>        : Perform work in addition to message exchanges (for latency test, i.e., option `-t <>`) 
