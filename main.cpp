@@ -496,9 +496,9 @@ void parseCommandLine(int argc, char** const argv)
       std::cout << "At present, only MPI Isend/Irecv communication is supported when a single process's neighborhood is selected.." << std::endl;
   }
   
-  if (me == 0 && lttOption > 2)
+  if (me == 0 && lttOption > 5)
   {
-      std::cout << "Valid values for latency test arguments are 0 (Isend/Irecv, the default case), 1 (Neighbor All-to-All) and 2 (Neighbor All-Gather)." << std::endl;
+      std::cout << "Valid values for latency test arguments are 0 (Isend/Irecv, the default case), 1 (Neighbor All-to-All), 2 (Neighbor All-Gather), and 3-5 (RMA)." << std::endl;
   }
 
   // errors
