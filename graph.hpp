@@ -1347,6 +1347,8 @@ class Graph
                     pos++;
                 }
             }
+            if (rank_ == 0)
+                pg->write_to_file("filename");
 
             // Invoke matching on weighted process graph, pg
             std::vector<GraphElem> pe_list, pe_map, pe_list_nodup;
