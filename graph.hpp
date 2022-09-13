@@ -166,7 +166,39 @@ class Graph
         }
 
         // Memory: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
-        inline void nbrscan() 
+#ifdef ZFILL_CACHE_LINES
+	inline void nbrscan() 
+	{
+#pragma omp parallel for default(none), shared(edge_weights_, edge_indices_, edge_list_), \
+		firstprivate(nv_, ELEMS_PER_CACHE_LINE) schedule(static)
+		for (GraphElem i=0; i < nv_; i++) {
+			const GraphElem nbr_count = edge_indices_[i+1] - edge_indices_[i];
+			const GraphElem nbr_count_chunk = 
+				(nbr_count / ELEMS_PER_CACHE_LINE) == 0 ? nbr_count : nbr_count / ELEMS_PER_CACHE_LINE;
+			for(GraphElem e = 0; e < nbr_count_chunk; e++) {
+				GraphElem NE_beg;
+				if (nbr_count_chunk > ELEMS_PER_CACHE_LINE)
+					NE_beg = edge_indices_[i] + e * ELEMS_PER_CACHE_LINE;
+				else
+					NE_beg = edge_indices_[i];
+				GraphElem NE_end = std::min(edge_indices_[i+1], (NE_beg + ELEMS_PER_CACHE_LINE));
+				GraphWeight * const zfill_limit = edge_weights_ + NE_end - ZFILL_OFFSET;
+				
+				GraphWeight *edge_weights = edge_weights_ + NE_beg;
+				Edge * const edge_list = edge_list_ + NE_beg;
+
+				if (edge_weights + ZFILL_OFFSET < zfill_limit)
+					zfill(reinterpret_cast<GraphWeight*>(edge_weights) + ZFILL_OFFSET);
+
+				for (GraphElem j = 0; j < ELEMS_PER_CACHE_LINE; j++) {
+					Edge const& edge = edge_list[j];
+					edge_weights[j] = edge.weight_;
+				}
+			}
+		}
+	}
+#else  
+	inline void nbrscan() 
         {
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_BEGIN("nbrscan");
@@ -212,9 +244,35 @@ class Graph
 	    CALI_MARK_END("nbrscan");
 #endif
         }
+#endif  
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
-        inline void nbrsum() 
+#ifdef ZFILL_CACHE_LINES
+	inline void nbrsum() 
+	{
+		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
+#pragma omp parallel for default(none), shared(vertex_degree_, edge_indices_, edge_list_), \
+		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+		for (GraphElem i=0; i < NV_blk_sz; i++) {
+			GraphElem NV_beg = i * ELEMS_PER_CACHE_LINE;
+			GraphElem NV_end = std::min(nv_, ((i + 1) * ELEMS_PER_CACHE_LINE) );
+
+			GraphWeight * const zfill_limit = vertex_degree_ + NV_end - ZFILL_OFFSET;
+			GraphWeight * vertex_degree = vertex_degree_ + NV_beg;
+
+			if (vertex_degree + ZFILL_OFFSET < zfill_limit)
+				zfill(vertex_degree + ZFILL_OFFSET);
+
+			for(GraphElem j = 0; j < ELEMS_PER_CACHE_LINE; j++) {  
+				for (GraphElem e = edge_indices_[NV_beg+j]; e < edge_indices_[NV_beg+j+1]; e++) {
+					Edge const& edge = edge_list_[e];
+					vertex_degree[j] += edge.weight_;
+				}
+			}
+		}
+	}
+#else 
+	inline void nbrsum() 
         {
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_BEGIN("nbrsum");
@@ -260,9 +318,38 @@ class Graph
 	    CALI_MARK_END("nbrsum");
 #endif
         }
+#endif
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
-        inline void nbrmax() 
+#ifdef ZFILL_CACHE_LINES
+	inline void nbrmax() 
+	{
+		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
+#pragma omp parallel for default(none), shared(vertex_degree_, edge_indices_, edge_list_), \
+		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+		for (GraphElem i=0; i < NV_blk_sz; i++) {
+			GraphElem NV_beg = i * ELEMS_PER_CACHE_LINE;
+			GraphElem NV_end = std::min(nv_, ((i + 1) * ELEMS_PER_CACHE_LINE) );
+
+			GraphWeight * const zfill_limit = vertex_degree_ + NV_end - ZFILL_OFFSET;
+			GraphWeight * vertex_degree = vertex_degree_ + NV_beg;
+
+			if (vertex_degree + ZFILL_OFFSET < zfill_limit)
+				zfill(vertex_degree + ZFILL_OFFSET);
+
+			for(GraphElem j = 0; j < ELEMS_PER_CACHE_LINE; j++) {  
+				GraphWeight wmax = -1.0;
+				for (GraphElem e = edge_indices_[NV_beg+j]; e < edge_indices_[NV_beg+j+1]; e++) {
+					Edge const& edge = edge_list_[e];
+					if (wmax < edge.weight_)
+						wmax = edge.weight_;
+				}
+				vertex_degree[j] = wmax;
+			}
+		}
+	}
+#else 
+	inline void nbrmax() 
         {
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_BEGIN("nbrmax");
@@ -311,7 +398,7 @@ class Graph
 	    CALI_MARK_END("nbrmax");
 #endif
         }
-
+#endif
         
 	// print statistics about edge distribution
         void print_stats()
