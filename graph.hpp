@@ -166,7 +166,7 @@ class Graph
         }
 
         // Memory: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
-#ifdef ZFILL_CACHE_LINES
+#if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
 	inline void nbrscan() 
 	{
 #ifdef LIKWID_MARKER_ENABLE
@@ -269,7 +269,7 @@ class Graph
 #endif  
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
-#ifdef ZFILL_CACHE_LINES
+#if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
 	inline void nbrsum() 
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
@@ -364,7 +364,7 @@ class Graph
 #endif
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
-#ifdef ZFILL_CACHE_LINES
+#if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
 	inline void nbrmax() 
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;

@@ -198,44 +198,61 @@ int main(int argc, char **argv)
     double avgtime[3] = {0}, maxtime[3] = {0}, mintime[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
     
     LIKWID_MARKER_INIT;
+
+    std::cout << "Enabled Likwid Perf Monitoring framework." << std::endl;
+    
+#if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
     #pragma omp parallel
     {
-      LIKWID_MARKER_REGISTER("neve");
+      LIKWID_MARKER_REGISTER("nbrscan_zfill");
     }
- 
-    std::cout << "Enabled Likwid Perf Monitoring framework." << std::endl;
-
-    for (int k = 0; k < NTIMES; k++)
+#else
+    #pragma omp parallel
     {
-        times[0][k] = omp_get_wtime();
+      LIKWID_MARKER_REGISTER("nbrscan");
+    }
+#endif
+        times[0][0] = omp_get_wtime();
         g->nbrscan();
-        times[0][k] = omp_get_wtime() - times[0][k];
-    }
-    
-    for (int k = 0; k < NTIMES; k++)
+        times[0][0] = omp_get_wtime() - times[0][0];
+ 
+#if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+    #pragma omp parallel
     {
-        times[1][k] = omp_get_wtime();
+      LIKWID_MARKER_REGISTER("nbrsum_zfill");
+    }
+#else
+    #pragma omp parallel
+    {
+      LIKWID_MARKER_REGISTER("nbrsum");
+    }
+#endif   
+        times[1][0] = omp_get_wtime();
         g->nbrsum();
-        times[1][k] = omp_get_wtime() - times[1][k];
-    }
-    
-    for (int k = 0; k < NTIMES; k++)
+        times[1][0] = omp_get_wtime() - times[1][0];
+ 
+#if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+    #pragma omp parallel
     {
-        times[2][k] = omp_get_wtime();
-        g->nbrmax();
-        times[2][k] = omp_get_wtime() - times[2][k];
+      LIKWID_MARKER_REGISTER("nbrmax_zfill");
     }
+#else
+    #pragma omp parallel
+    {
+      LIKWID_MARKER_REGISTER("nbrmax");
+    }
+#endif   
+        times[2][0] = omp_get_wtime();
+        g->nbrmax();
+        times[2][0] = omp_get_wtime() - times[2][0];
 
     LIKWID_MARKER_CLOSE;
 
-    for (int k = 1; k < NTIMES; k++) // note -- skip first iteration
+    for (int j = 0; j < 3; j++)
     {
-        for (int j = 0; j < 3; j++)
-        {
-            avgtime[j] = avgtime[j] + times[j][k];
-            mintime[j] = std::min(mintime[j], times[j][k]);
-            maxtime[j] = std::max(maxtime[j], times[j][k]);
-        }
+        avgtime[j] = avgtime[j] + times[j][0];
+        mintime[j] = std::min(mintime[j], times[j][0]);
+        maxtime[j] = std::max(maxtime[j], times[j][0]);
     }
 
     std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
