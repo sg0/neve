@@ -59,6 +59,19 @@
 
 #include "graph.hpp"
 
+#ifdef LIKWID_MARKER_ENABLE
+#include <likwid.h>
+#else
+#define LIKWID_MARKER_INIT
+#define LIKWID_MARKER_THREADINIT
+#define LIKWID_MARKER_SWITCH
+#define LIKWID_MARKER_REGISTER(regionTag)
+#define LIKWID_MARKER_START(regionTag)
+#define LIKWID_MARKER_STOP(regionTag)
+#define LIKWID_MARKER_CLOSE
+#define LIKWID_MARKER_GET(regionTag, nevents, events, time, count)
+#endif
+
 // A lot of print diagnostics is lifted from
 // the STREAM benchmark.
 
@@ -180,6 +193,62 @@ int main(int argc, char **argv)
         g->nbrscan();
         g->nbrsum();
         g->nbrmax();
+#elif defined(LIKWID_MARKER_ENABLE)
+    double times[3][NTIMES]; 
+    double avgtime[3] = {0}, maxtime[3] = {0}, mintime[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
+    
+    LIKWID_MARKER_INIT;
+    #pragma omp parallel
+    {
+      LIKWID_MARKER_THREADINIT;
+    }
+ 
+    std::cout << "Enabled Likwid Perf Monitoring framework." << std::endl;
+
+    for (int k = 0; k < NTIMES; k++)
+    {
+        times[0][k] = omp_get_wtime();
+        g->nbrscan();
+        times[0][k] = omp_get_wtime() - times[0][k];
+    }
+    
+    for (int k = 0; k < NTIMES; k++)
+    {
+        times[1][k] = omp_get_wtime();
+        g->nbrsum();
+        times[1][k] = omp_get_wtime() - times[1][k];
+    }
+    
+    for (int k = 0; k < NTIMES; k++)
+    {
+        times[2][k] = omp_get_wtime();
+        g->nbrmax();
+        times[2][k] = omp_get_wtime() - times[2][k];
+    }
+
+    LIKWID_MARKER_CLOSE;
+
+    for (int k = 1; k < NTIMES; k++) // note -- skip first iteration
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            avgtime[j] = avgtime[j] + times[j][k];
+            mintime[j] = std::min(mintime[j], times[j][k]);
+            maxtime[j] = std::max(maxtime[j], times[j][k]);
+        }
+    }
+
+    std::string label[3] = {"Neighbor Copy:    ", "Neighbor Add :    ", "Neighbor Max :    "};
+    double bytes[3] = { (double)count_nbrscan, (double)count_nbrsum, (double)count_nbrmax };
+
+    printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
+    for (int j = 0; j < 3; j++) 
+    {
+        avgtime[j] = avgtime[j]/(double)(NTIMES-1);
+        std::printf("%s%12.1f  %12.6f  %11.6f  %11.6f\n", label[j].c_str(),
+                1.0E-06 * bytes[j]/mintime[j], avgtime[j], mintime[j],
+                maxtime[j]);
+    }
 #else
     double times[3][NTIMES]; 
     double avgtime[3] = {0}, maxtime[3] = {0}, mintime[3] = {FLT_MAX,FLT_MAX,FLT_MAX};

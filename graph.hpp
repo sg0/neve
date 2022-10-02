@@ -169,8 +169,16 @@ class Graph
 #ifdef ZFILL_CACHE_LINES
 	inline void nbrscan() 
 	{
+#ifdef LIKWID_MARKER_ENABLE
+#pragma omp parallel
+    {
+        LIKWID_MARKER_START("nbrscan_zfill");
+#pragma omp for default(none), shared(edge_weights_, edge_indices_, edge_list_), \
+		firstprivate(nv_, ELEMS_PER_CACHE_LINE) schedule(static)
+#else
 #pragma omp parallel for default(none), shared(edge_weights_, edge_indices_, edge_list_), \
 		firstprivate(nv_, ELEMS_PER_CACHE_LINE) schedule(static)
+#endif
 		for (GraphElem i=0; i < nv_; i++) {
 			const GraphElem nbr_count = edge_indices_[i+1] - edge_indices_[i];
 			const GraphElem nbr_count_chunk = 
@@ -196,7 +204,12 @@ class Graph
 				}
 			}
 		}
-	}
+
+#ifdef LIKWID_MARKER_ENABLE
+        LIKWID_MARKER_STOP("nbrscan_zfill");
+      }
+#endif
+  }
 #else  
 	inline void nbrscan() 
         {
@@ -221,6 +234,11 @@ class Graph
 #elif defined USE_OMP_TASKS_FOR
 #pragma omp parallel
 #pragma omp for
+#elif defined LIKWID_MARKER_ENABLE
+#pragma omp parallel
+    {
+        LIKWID_MARKER_START("nbrscan");
+#pragma omp for
 #else
 #pragma omp parallel for
 #endif
@@ -243,6 +261,10 @@ class Graph
 	    CALI_MARK_END("parallel");
 	    CALI_MARK_END("nbrscan");
 #endif
+#ifdef LIKWID_MARKER_ENABLE
+            LIKWID_MARKER_STOP("nbrscan");
+    }
+#endif
         }
 #endif  
 
@@ -251,8 +273,16 @@ class Graph
 	inline void nbrsum() 
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
+#ifdef LIKWID_MARKER_ENABLE
+#pragma omp parallel
+    {
+        LIKWID_MARKER_START("nbrsum_zfill");
+#pragma omp for default(none), shared(vertex_degree_, edge_indices_, edge_list_), \
+		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#else
 #pragma omp parallel for default(none), shared(vertex_degree_, edge_indices_, edge_list_), \
 		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#endif
 		for (GraphElem i=0; i < NV_blk_sz; i++) {
 			GraphElem NV_beg = i * ELEMS_PER_CACHE_LINE;
 			GraphElem NV_end = std::min(nv_, ((i + 1) * ELEMS_PER_CACHE_LINE) );
@@ -270,6 +300,10 @@ class Graph
 				}
 			}
 		}
+#ifdef LIKWID_MARKER_ENABLE
+            LIKWID_MARKER_STOP("nbrsum_zfill");
+            }
+#endif
 	}
 #else 
 	inline void nbrsum() 
@@ -295,6 +329,11 @@ class Graph
 #elif defined USE_OMP_TASKS_FOR
 #pragma omp parallel
 #pragma omp for
+#elif defined LIKWID_MARKER_ENABLE
+#pragma omp parallel
+    {
+        LIKWID_MARKER_START("nbrsum");
+#pragma omp for
 #else
 #pragma omp parallel for
 #endif
@@ -317,6 +356,10 @@ class Graph
 	    CALI_MARK_END("parallel");
 	    CALI_MARK_END("nbrsum");
 #endif
+#ifdef LIKWID_MARKER_ENABLE
+            LIKWID_MARKER_STOP("nbrsum");
+            }
+#endif
         }
 #endif
 
@@ -325,8 +368,16 @@ class Graph
 	inline void nbrmax() 
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
+#ifdef LIKWID_MARKER_ENABLE
+#pragma omp parallel
+    {
+        LIKWID_MARKER_START("nbrmax_zfill");
+#pragma omp for default(none), shared(vertex_degree_, edge_indices_, edge_list_), \
+		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#else
 #pragma omp parallel for default(none), shared(vertex_degree_, edge_indices_, edge_list_), \
 		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#endif
 		for (GraphElem i=0; i < NV_blk_sz; i++) {
 			GraphElem NV_beg = i * ELEMS_PER_CACHE_LINE;
 			GraphElem NV_end = std::min(nv_, ((i + 1) * ELEMS_PER_CACHE_LINE) );
@@ -347,6 +398,10 @@ class Graph
 				vertex_degree[j] = wmax;
 			}
 		}
+#ifdef LIKWID_MARKER_ENABLE
+            LIKWID_MARKER_STOP("nbrmax_zfill");
+            }
+#endif
 	}
 #else 
 	inline void nbrmax() 
@@ -372,6 +427,11 @@ class Graph
 #elif defined USE_OMP_TASKS_FOR
 #pragma omp parallel
 #pragma omp for
+#elif defined LIKWID_MARKER_ENABLE
+#pragma omp parallel
+   {
+     LIKWID_MARKER_START("nbrmax");
+     #pragma omp for
 #else
 #pragma omp parallel for
 #endif
@@ -396,6 +456,10 @@ class Graph
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_END("parallel");
 	    CALI_MARK_END("nbrmax");
+#endif
+#ifdef LIKWID_MARKER_ENABLE
+            LIKWID_MARKER_STOP("nbrmax");
+          }
 #endif
         }
 #endif
