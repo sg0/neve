@@ -57,20 +57,11 @@
 #include <caliper/cali-manager.h>
 #endif
 
-#include "graph.hpp"
-
 #ifdef LIKWID_MARKER_ENABLE
-#include <likwid.h>
-#else
-#define LIKWID_MARKER_INIT
-#define LIKWID_MARKER_THREADINIT
-#define LIKWID_MARKER_SWITCH
-#define LIKWID_MARKER_REGISTER(regionTag)
-#define LIKWID_MARKER_START(regionTag)
-#define LIKWID_MARKER_STOP(regionTag)
-#define LIKWID_MARKER_CLOSE
-#define LIKWID_MARKER_GET(regionTag, nevents, events, time, count)
+#include <likwid-marker.h>
 #endif
+
+#include "graph.hpp"
 
 // A lot of print diagnostics is lifted from
 // the STREAM benchmark.
