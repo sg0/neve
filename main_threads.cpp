@@ -200,7 +200,7 @@ int main(int argc, char **argv)
     LIKWID_MARKER_INIT;
     #pragma omp parallel
     {
-      LIKWID_MARKER_THREADINIT;
+      LIKWID_MARKER_REGISTER("neve");
     }
  
     std::cout << "Enabled Likwid Perf Monitoring framework." << std::endl;
