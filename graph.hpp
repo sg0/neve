@@ -170,11 +170,10 @@ class Graph
 	inline void nbrscan() 
 	{
 #ifdef LIKWID_MARKER_ENABLE
-#pragma omp parallel
+#pragma omp parallel shared(edge_weights_, edge_indices_, edge_list_)
     {
         LIKWID_MARKER_START("nbrscan_zfill");
-#pragma omp for shared(edge_weights_, edge_indices_, edge_list_), \
-		firstprivate(nv_, ELEMS_PER_CACHE_LINE) schedule(static)
+#pragma omp for firstprivate(nv_, ELEMS_PER_CACHE_LINE) schedule(static)
 #else
 #pragma omp parallel for default(none), shared(edge_weights_, edge_indices_, edge_list_), \
 		firstprivate(nv_, ELEMS_PER_CACHE_LINE) schedule(static)
@@ -274,11 +273,10 @@ class Graph
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
 #ifdef LIKWID_MARKER_ENABLE
-#pragma omp parallel
+#pragma omp parallel shared(vertex_degree_, edge_indices_, edge_list_)
     {
         LIKWID_MARKER_START("nbrsum_zfill");
-#pragma omp for shared(vertex_degree_, edge_indices_, edge_list_), \
-		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#pragma omp for firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
 #else
 #pragma omp parallel for default(none), shared(vertex_degree_, edge_indices_, edge_list_), \
 		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
@@ -369,11 +367,10 @@ class Graph
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
 #ifdef LIKWID_MARKER_ENABLE
-#pragma omp parallel
+#pragma omp parallel shared(vertex_degree_, edge_indices_, edge_list_)
     {
         LIKWID_MARKER_START("nbrmax_zfill");
-#pragma omp for shared(vertex_degree_, edge_indices_, edge_list_), \
-		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#pragma omp for firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
 #else
 #pragma omp parallel for default(none), shared(vertex_degree_, edge_indices_, edge_list_), \
 		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
