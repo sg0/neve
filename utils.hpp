@@ -240,6 +240,39 @@ class CSR
         Edge& get_edge(GraphElem const index)
         { return edge_list_[index]; }
         
+        int write_to_file2(std::string filename)
+        {
+            
+            std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::binary |
+            std::ofstream::trunc);
+            
+            if (!ofs) {
+                std::cerr << "Error opening output file: " << filename << std::endl;
+                exit(EXIT_FAILURE);
+            } else {
+                std::cout << "Writing to file: " << filename << std::endl;
+            }
+
+            ofs.write(reinterpret_cast<char *>(&nv_), sizeof(GraphElem));
+            ofs.write(reinterpret_cast<char *>(&ne_), sizeof(GraphElem));
+            
+            ofs.write(reinterpret_cast<char *>(edge_indices_), (nv_+1)*sizeof(GraphElem));
+            
+            for (GraphElem v = 0; v < nv_; v ++) {
+                GraphElem e0, e1;
+                
+                edge_range(v, e0, e1);
+                
+                for (GraphElem j = e0; j < e1; j ++) {
+                    const Edge &edge = get_edge(j);
+                    ofs.write(reinterpret_cast<const char *>(&edge), sizeof(Edge));
+                }
+            }
+            
+            ofs.close();
+            return 0;     
+        }
+        
         int write_to_file(std::string filename)
         {
             printf("ne_: %d\nedge_list_: ", ne_);
@@ -260,6 +293,11 @@ class CSR
             struct edge_pair {
                 GraphElem vtxid_src, vtxid_tgt;
             } *edge_list = (edge_pair *)calloc((int32_t)ne_, sizeof(edge_pair));
+            
+//            struct edge_pair {
+//                GraphElem edge_tail;
+//                GraphWeight edge_weight;
+//            } *edge_list = (edge_pair *)calloc((int32_t)ne_, sizeof(edge_pair));
             
             struct edge_data {
                 GraphElem vtxid, degree;

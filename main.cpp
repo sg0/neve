@@ -54,6 +54,8 @@
 #include "comm.hpp"
 
 static std::string inputFileName;
+static std::string outputFileName;
+static bool writeOutputFile = false;
 static int me, nprocs;
 static int ranksPerNode = 1;
 static GraphElem nvRGG = 0;
@@ -154,7 +156,7 @@ int main(int argc, char **argv)
         else if (rankOrderType == 2)
             g->weighted_rank_order();
         else
-            g->matching_rank_order();
+            g->matching_rank_order(outputFileName, writeOutputFile);
         t1 = MPI_Wtime() - t0;
         double tr = 0.0;
         MPI_Reduce(&t1, &tr, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
@@ -397,6 +399,10 @@ void parseCommandLine(int argc, char** const argv)
     case 'o':
       rankOrderType = atoi(optarg);
       createRankOrder = true;
+      break;
+    case 'a':
+      outputFileName.assign(optarg);
+      writeOutputFile = true;
       break;
     default:
       assert(0 && "Should not reach here!!");
