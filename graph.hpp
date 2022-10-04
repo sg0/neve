@@ -189,8 +189,7 @@ class Graph
 
 				for (int i=0; i<ELEMS_PER_CACHE_LINE; ++i) {
 					for (GraphElem e = edge_indices[i]; e < edge_indices[i+1]; e++) {
-						Edge const& edge = edge_list_[e];
-						vertex_degree[i] = edge.weight_;
+						vertex_degree[i] = edge_list_[e].weight_;
 					}
 				}
 			}
@@ -202,13 +201,12 @@ class Graph
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
 #ifdef LIKWID_MARKER_ENABLE
-#pragma omp parallel shared(vertex_degree_, edge_indices_, edge_list_)
+#pragma omp parallel 
     {
         LIKWID_MARKER_START("nbrscan_zfill");
-#pragma omp for firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#pragma omp for 
 #else
-#pragma omp parallel for default(none), shared(vertex_degree_, edge_indices_, edge_list_), \
-		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#pragma omp parallel for schedule(static)
 #endif
 	for (GraphElem i=0; i < NV_blk_sz; i++) {
 		GraphElem NV_beg = i * ELEMS_PER_CACHE_LINE;
@@ -223,8 +221,7 @@ class Graph
 
 		for(GraphElem j = 0; j < ELEMS_PER_CACHE_LINE; j++) {  
 			for (GraphElem e = edge_indices[j]; e < edge_indices[j+1]; e++) {
-				Edge const& edge = edge_list_[e];
-				vertex_degree[j] = edge.weight_;
+				vertex_degree[j] = edge_list_[e].weight_;
 			}
 		}
 	}
@@ -261,9 +258,9 @@ class Graph
 #pragma omp parallel
     {
         LIKWID_MARKER_START("nbrscan");
-#pragma omp for
+#pragma omp for schedule(static)
 #else
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
 #endif
             for (GraphElem i = 0; i < nv_; i++)
             {
@@ -273,8 +270,7 @@ class Graph
 #endif
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
-                    Edge const& edge = edge_list_[e];
-                    vertex_degree_[i] = edge.weight_;
+                    vertex_degree_[i] = edge_list_[e].weight_;
                 }
 #ifdef USE_OMP_TASKS_FOR
 		    }
@@ -315,8 +311,7 @@ class Graph
 
 				for (int i=0; i<ELEMS_PER_CACHE_LINE; ++i) {
 					for (GraphElem e = edge_indices[i]; e < edge_indices[i+1]; e++) {
-						Edge const& edge = edge_list_[e];
-						vertex_degree[i] += edge.weight_;
+						vertex_degree[i] += edge_list_[e].weight_;
 					}
 				}
 			}
@@ -328,13 +323,12 @@ class Graph
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
 #ifdef LIKWID_MARKER_ENABLE
-#pragma omp parallel shared(vertex_degree_, edge_indices_, edge_list_)
+#pragma omp parallel
     {
         LIKWID_MARKER_START("nbrsum_zfill");
-#pragma omp for firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#pragma omp for schedule(static)
 #else
-#pragma omp parallel for default(none), shared(vertex_degree_, edge_indices_, edge_list_), \
-		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#pragma omp parallel for schedule(static)
 #endif
 		for (GraphElem i=0; i < NV_blk_sz; i++) {
 			GraphElem NV_beg = i * ELEMS_PER_CACHE_LINE;
@@ -348,8 +342,7 @@ class Graph
 
 			for(GraphElem j = 0; j < ELEMS_PER_CACHE_LINE; j++) {  
 				for (GraphElem e = edge_indices_[NV_beg+j]; e < edge_indices_[NV_beg+j+1]; e++) {
-					Edge const& edge = edge_list_[e];
-					vertex_degree[j] += edge.weight_;
+					vertex_degree[j] += edge_list_[e].weight_;
 				}
 			}
 		}
@@ -386,9 +379,9 @@ class Graph
 #pragma omp parallel
     {
         LIKWID_MARKER_START("nbrsum");
-#pragma omp for
+#pragma omp for schedule(static)
 #else
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
 #endif
             for (GraphElem i = 0; i < nv_; i++)
             {
@@ -398,8 +391,7 @@ class Graph
 #endif
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
-                    Edge const& edge = edge_list_[e];
-                    vertex_degree_[i] += edge.weight_;
+                    vertex_degree_[i] += edge_list_[e].weight_;
                 }
 #ifdef USE_OMP_TASKS_FOR
 		    }
@@ -441,9 +433,8 @@ class Graph
 				for (int i=0; i<ELEMS_PER_CACHE_LINE; ++i) {
 					GraphWeight wmax = -1.0;
 					for (GraphElem e = edge_indices[i]; e < edge_indices[i+1]; e++) {
-						Edge const& edge = edge_list_[e];
-						if (wmax < edge.weight_)
-							wmax = edge.weight_;
+						if (wmax < edge_list_[e].weight_)
+							wmax = edge_list_[e].weight_;
 					}
 					vertex_degree[i] = wmax;
 				}
@@ -456,13 +447,12 @@ class Graph
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
 #ifdef LIKWID_MARKER_ENABLE
-#pragma omp parallel shared(vertex_degree_, edge_indices_, edge_list_)
+#pragma omp parallel
     {
         LIKWID_MARKER_START("nbrmax_zfill");
-#pragma omp for firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#pragma omp for schedule(static)
 #else
-#pragma omp parallel for default(none), shared(vertex_degree_, edge_indices_, edge_list_), \
-		firstprivate(nv_, NV_blk_sz, ELEMS_PER_CACHE_LINE) schedule(static)
+#pragma omp parallel for schedule(static)
 #endif
 		for (GraphElem i=0; i < NV_blk_sz; i++) {
 			GraphElem NV_beg = i * ELEMS_PER_CACHE_LINE;
@@ -477,9 +467,8 @@ class Graph
 			for(GraphElem j = 0; j < ELEMS_PER_CACHE_LINE; j++) {  
 				GraphWeight wmax = -1.0;
 				for (GraphElem e = edge_indices_[NV_beg+j]; e < edge_indices_[NV_beg+j+1]; e++) {
-					Edge const& edge = edge_list_[e];
-					if (wmax < edge.weight_)
-						wmax = edge.weight_;
+					if (wmax < edge_list_[e].weight_)
+						wmax = edge_list_[e].weight_;
 				}
 				vertex_degree[j] = wmax;
 			}
@@ -517,9 +506,9 @@ class Graph
 #pragma omp parallel
    {
      LIKWID_MARKER_START("nbrmax");
-     #pragma omp for
+#pragma omp for schedule(static)
 #else
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
 #endif
             for (GraphElem i = 0; i < nv_; i++)
             {
@@ -530,9 +519,8 @@ class Graph
                 GraphWeight wmax = -1.0;
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
-                    Edge const& edge = edge_list_[e];
-                    if (wmax < edge.weight_)
-                        wmax = edge.weight_;
+                    if (wmax < edge_list_[e].weight_)
+                        wmax = edge_list_[e].weight_;
                 }
                 vertex_degree_[i] = wmax;
 #ifdef USE_OMP_TASKS_FOR
