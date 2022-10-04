@@ -207,6 +207,7 @@ int main(int argc, char **argv)
         g->nbrscan();
         times[0][0] = omp_get_wtime() - times[0][0];
  
+	g->flush();
 #if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
     #pragma omp parallel
     {
@@ -222,6 +223,7 @@ int main(int argc, char **argv)
         g->nbrsum();
         times[1][0] = omp_get_wtime() - times[1][0];
  
+	g->flush();
 #if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
     #pragma omp parallel
     {
@@ -237,6 +239,8 @@ int main(int argc, char **argv)
         g->nbrmax();
         times[2][0] = omp_get_wtime() - times[2][0];
 
+	g->flush();
+    
     LIKWID_MARKER_CLOSE;
 
     for (int j = 0; j < 3; j++)
@@ -266,12 +270,20 @@ int main(int argc, char **argv)
         times[0][k] = omp_get_wtime();
         g->nbrscan();
         times[0][k] = omp_get_wtime() - times[0][k];
-        times[1][k] = omp_get_wtime();
+        
+	g->flush();
+	
+	times[1][k] = omp_get_wtime();
         g->nbrsum();
         times[1][k] = omp_get_wtime() - times[1][k];
-        times[2][k] = omp_get_wtime();
-        g->nbrmax();
+
+	g->flush();
+        
+	times[2][k] = omp_get_wtime();
+	g->nbrmax();
         times[2][k] = omp_get_wtime() - times[2][k];
+	
+	g->flush();
     }
 
     for (int k = 1; k < NTIMES; k++) // note -- skip first iteration

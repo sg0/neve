@@ -68,12 +68,12 @@ class Graph
     public:
         Graph(): nv_(-1), ne_(-1),
                  edge_indices_(nullptr), edge_list_(nullptr),
-                 vertex_degree_(nullptr), edge_weights_(nullptr)
+                 vertex_degree_(nullptr)
         {}
                 
         Graph(GraphElem nv): 
             nv_(nv), ne_(-1), 
-            edge_list_(nullptr), edge_weights_(nullptr)
+            edge_list_(nullptr)
         {
             edge_indices_   = new GraphElem[nv_+1];
             vertex_degree_  = new GraphWeight[nv_];
@@ -85,14 +85,12 @@ class Graph
             edge_indices_   = new GraphElem[nv_+1];
             edge_list_      = new Edge[ne_];
             vertex_degree_  = new GraphWeight[nv_];
-            edge_weights_   = new GraphWeight[ne_];
         }
 
         ~Graph() 
         {
             delete []edge_indices_;
             delete []edge_list_;
-            delete []edge_weights_;
             delete []vertex_degree_;
         }
          
@@ -118,7 +116,6 @@ class Graph
         { 
             ne_ = ne; 
             edge_list_      = new Edge[ne_];
-            edge_weights_   = new GraphWeight[ne_];
         }
 
         GraphElem get_nv() const { return nv_; }
@@ -164,6 +161,9 @@ class Graph
                     "}, which will overwhelm STDOUT." << std::endl;
             }
         }
+
+	void flush()
+	{ std::memset(vertex_degree_, 0, nv_*sizeof(GraphWeight)); }
 
         // Memory: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
 #if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
@@ -243,7 +243,6 @@ class Graph
             GraphElem e0, e1;
 #ifdef ENABLE_PREFETCH
 #ifdef __INTEL_COMPILER
-#pragma noprefetch edge_weights_
 #pragma noprefetch vertex_degree_
 #pragma prefetch edge_indices_:3
 #pragma prefetch edge_list_:3
@@ -275,7 +274,6 @@ class Graph
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
                     Edge const& edge = edge_list_[e];
-                    //edge_weights_[e] = edge.weight_;
                     vertex_degree_[i] = edge.weight_;
                 }
 #ifdef USE_OMP_TASKS_FOR
@@ -600,7 +598,7 @@ class Graph
         // public variables
         GraphElem *edge_indices_;
         Edge *edge_list_;
-        GraphWeight *edge_weights_, *vertex_degree_;
+        GraphWeight *vertex_degree_;
     private:
         GraphElem nv_, ne_;
 };
