@@ -167,6 +167,37 @@ class Graph
 
         // Memory: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
 #if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+#if 0
+	inline void nbrscan()
+	{
+#pragma omp parallel
+		{
+			int const tid = omp_get_thread_num();
+			int const nthreads = omp_get_num_threads();
+			size_t const chunk = nv_ / nthreads;
+
+			GraphWeight * const zfill_limit = vertex_degree_ + (tid+1)*chunk - ZFILL_OFFSET;
+
+#pragma omp for schedule(static)
+			for (size_t j=0; j<nv_; j+=ELEMS_PER_CACHE_LINE) {
+				GraphWeight * const vertex_degree = vertex_degree_ + j;
+				GraphElem const * const edge_indices = edge_indices_ + j;
+
+				if (vertex_degree+ZFILL_OFFSET < zfill_limit) {
+					zfill(vertex_degree+ZFILL_OFFSET);
+				}
+
+				for (int i=0; i<ELEMS_PER_CACHE_LINE; ++i) {
+					for (GraphElem e = edge_indices[i]; e < edge_indices[i+1]; e++) {
+						Edge const& edge = edge_list_[e];
+						vertex_degree[i] = edge.weight_;
+					}
+				}
+			}
+
+		} // parallel
+	}
+#endif
 	inline void nbrscan() 
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
@@ -264,6 +295,37 @@ class Graph
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
 #if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+#if 0
+	inline void nbrsum()
+	{
+#pragma omp parallel
+		{
+			int const tid = omp_get_thread_num();
+			int const nthreads = omp_get_num_threads();
+			size_t const chunk = nv_ / nthreads;
+
+			GraphWeight * const zfill_limit = vertex_degree_ + (tid+1)*chunk - ZFILL_OFFSET;
+
+#pragma omp for schedule(static)
+			for (size_t j=0; j<nv_; j+=ELEMS_PER_CACHE_LINE) {
+				GraphWeight * const vertex_degree = vertex_degree_ + j;
+				GraphElem const * const edge_indices = edge_indices_ + j;
+
+				if (vertex_degree+ZFILL_OFFSET < zfill_limit) {
+					zfill(vertex_degree+ZFILL_OFFSET);
+				}
+
+				for (int i=0; i<ELEMS_PER_CACHE_LINE; ++i) {
+					for (GraphElem e = edge_indices[i]; e < edge_indices[i+1]; e++) {
+						Edge const& edge = edge_list_[e];
+						vertex_degree[i] += edge.weight_;
+					}
+				}
+			}
+
+		} // parallel
+	}
+#endif
 	inline void nbrsum() 
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;
@@ -358,6 +420,40 @@ class Graph
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
 #if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+#if 0
+	inline void nbrmax()
+	{
+#pragma omp parallel
+		{
+			int const tid = omp_get_thread_num();
+			int const nthreads = omp_get_num_threads();
+			size_t const chunk = nv_ / nthreads;
+
+			GraphWeight * const zfill_limit = vertex_degree_ + (tid+1)*chunk - ZFILL_OFFSET;
+
+#pragma omp for schedule(static)
+			for (size_t j=0; j<nv_; j+=ELEMS_PER_CACHE_LINE) {
+				GraphWeight * const vertex_degree = vertex_degree_ + j;
+				GraphElem const * const edge_indices = edge_indices_ + j;
+
+				if (vertex_degree+ZFILL_OFFSET < zfill_limit) {
+					zfill(vertex_degree+ZFILL_OFFSET);
+				}
+
+				for (int i=0; i<ELEMS_PER_CACHE_LINE; ++i) {
+					GraphWeight wmax = -1.0;
+					for (GraphElem e = edge_indices[i]; e < edge_indices[i+1]; e++) {
+						Edge const& edge = edge_list_[e];
+						if (wmax < edge.weight_)
+							wmax = edge.weight_;
+					}
+					vertex_degree[i] = wmax;
+				}
+			}
+
+		} // parallel
+	}
+#endif
 	inline void nbrmax() 
 	{
 		GraphElem NV_blk_sz = nv_ / ELEMS_PER_CACHE_LINE;

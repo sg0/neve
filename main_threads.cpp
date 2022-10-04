@@ -252,7 +252,7 @@ int main(int argc, char **argv)
     printf("Function            Best Rate MB/s  Avg time     Min time     Max time\n");
     for (int j = 0; j < 3; j++) 
     {
-        avgtime[j] = avgtime[j]/(double)(NTIMES-1);
+        //avgtime[j] = avgtime[j]/(double)(NTIMES-1);
         std::printf("%s%12.1f  %12.6f  %11.6f  %11.6f\n", label[j].c_str(),
                 1.0E-06 * bytes[j]/mintime[j], avgtime[j], mintime[j],
                 maxtime[j]);
