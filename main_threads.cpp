@@ -51,6 +51,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <limits>
 
 #ifdef LLNL_CALIPER_ENABLE
 #include <caliper/cali.h>
@@ -75,6 +76,21 @@ static bool randomNumberLCG = false;
 
 // parse command line parameters
 static void parseCommandLine(int argc, char** argv);
+
+// from STREAM
+static double mysecond()
+{
+    struct timeval tp;
+    struct timezone tzp;
+    int i;
+
+    i = gettimeofday(&tp, &tzp);
+    return ((double) tp.tv_sec + (double) tp.tv_usec * 1.e-6);
+}
+
+#if !defined(USE_OMP_TIME)
+#define omp_get_wtime mysecond
+#endif
 
 int main(int argc, char **argv)
 {
@@ -124,21 +140,10 @@ int main(int argc, char **argv)
     // nbrmax : 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + nv*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
     const GraphElem nv = g->get_nv();
     const GraphElem ne = g->get_ne();
-#ifdef EDGE_AS_VERTEX_PAIR
-    const std::size_t count_nbrscan = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) 
-        + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight)); 
-    const std::size_t count_nbrsum = 2*nv*sizeof(GraphElem) + 3*ne*sizeof(GraphWeight) 
-        + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight));
-    const std::size_t count_nbrmax = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) + nv*sizeof(GraphWeight)
-        + 2*ne*(sizeof(GraphElem) + sizeof(GraphElem) + sizeof(GraphWeight)); 
-#else
-    const std::size_t count_nbrscan = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) 
-        + 2*ne*(sizeof(GraphElem) + sizeof(GraphWeight)); 
-    const std::size_t count_nbrsum = 2*nv*sizeof(GraphElem) + 3*ne*sizeof(GraphWeight) 
-        + 2*ne*(sizeof(GraphElem) + sizeof(GraphWeight));
-    const std::size_t count_nbrmax = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight) + nv*sizeof(GraphWeight) 
-        + 2*ne*(sizeof(GraphElem) + sizeof(GraphWeight));
-#endif
+
+    const std::size_t count_nbrscan = 2*nv*sizeof(GraphElem) + 2*ne*sizeof(GraphWeight); 
+    const std::size_t count_nbrsum = 2*nv*sizeof(GraphElem) + 3*ne*sizeof(GraphWeight);
+    const std::size_t count_nbrmax = 2*nv*sizeof(GraphElem) + 3*ne*sizeof(GraphWeight); 
 
     std::printf("Total memory required (Neighbor Scan) = %.1f KiB = %.1f MiB = %.1f GiB.\n",
         ( (double) (count_nbrscan) / 1024.0),
@@ -160,6 +165,25 @@ int main(int argc, char **argv)
     std::printf(" will be used to compute the reported bandwidth.\n");
 #endif
 
+   #pragma omp parallel
+    {
+        #pragma omp master
+        {
+            std::printf ("Number of Threads requested = %i\n", omp_get_num_threads());
+        }
+    }
+    int k = 0;
+    #pragma omp parallel
+    #pragma omp atomic
+    k++;
+    std::printf ("Number of Threads counted = %i\n\n",k);
+
+    #pragma omp parallel for
+    for (GraphElem j=0; j<nv; ++j) 
+    {
+        g->vertex_degree_[j] = 0.0;
+    }
+
     int quantum;
     if  ( (quantum = omp_get_wtick()) >= 1)
         std::printf("Your clock granularity/precision appears to be "
@@ -170,6 +194,10 @@ int main(int argc, char **argv)
                 "less than one microsecond.\n");
         quantum = 1;
     }
+
+#if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+    std::cout << "Zero filling is enabled.\n";
+#endif
 
     t0 = omp_get_wtime();
     g->nbrscan();
@@ -186,7 +214,8 @@ int main(int argc, char **argv)
         g->nbrmax();
 #elif defined(LIKWID_MARKER_ENABLE)
     double times[3][NTIMES]; 
-    double avgtime[3] = {0}, maxtime[3] = {0}, mintime[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
+    double avgtime[3] = {0}, maxtime[3] = {0}, 
+	   mintime[3] = {std::numeric_limits<double>::max(), std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
     
     LIKWID_MARKER_INIT;
 
@@ -263,7 +292,8 @@ int main(int argc, char **argv)
     }
 #else
     double times[3][NTIMES]; 
-    double avgtime[3] = {0}, maxtime[3] = {0}, mintime[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
+    double avgtime[3] = {0}, maxtime[3] = {0}, 
+	   mintime[3] = {std::numeric_limits<double>::max(), std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
 
     for (int k = 0; k < NTIMES; k++)
     {
