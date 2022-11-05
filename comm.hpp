@@ -46,6 +46,7 @@
 #include <utility>
 #include <cstring>
 #include <iomanip>
+#include <mpp/shmem.h>
 
 #if defined(SCOREP_USER_ENABLE)
 #include <scorep/SCOREP_User.h>
@@ -68,6 +69,7 @@
 
 #define TEST_MPI_RMA
 #define BW_RMA_USE_RPUT
+#define USE_SHMEM_FOR_RMA
 
 class Comm
 {
@@ -154,6 +156,7 @@ class Comm
             rreq_ = new MPI_Request[in_nghosts_]; \
 		  MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
 		      comm_, &rbuf2_, &window); \
+            shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
 	    if (lne > 1000) \
             { \
@@ -482,37 +485,46 @@ class Comm
             MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
         }
 
-		inline void comm_kernel_lt_rma_rput(GraphElem const& size)
-		{
-			MPI_Win_fence(0, window);
-			for (int p = 0; p < outdegree_; p++)
-			{
-				MPI_Rput(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
-			}
-			MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
-			MPI_Win_fence(0, window);
-		}
+#if defined(USE_SHMEM_FOR_RMA)
+        inline void comm_kernel_lt_rma_rput(GraphElem const& size)
+        {
+            shmem_barrier_all();
+            for (int p = 0; p < outdegree_; p++)
+            {
+                shmem_char_put(shmem_window, sbuf_, size, targets_[p]);
+            }
+            shmem_barrier_all();
+        }
+#else
+        inline void comm_kernel_lt_rma_rput(GraphElem const& size)
+        {
+		    for (int p = 0; p < outdegree_; p++)
+            {
+                MPI_Rput(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
+            }
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+            MPI_Win_flush_all(window);
+        }
+#endif
         
         inline void comm_kernel_lt_rma_rget(GraphElem const& size)
 		{
-			MPI_Win_fence(0, window);
 			for (int p = 0; p < outdegree_; p++)
 			{
 				MPI_Rget(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
 			}
 			MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
-			MPI_Win_fence(0, window);
+            MPI_Win_flush_all(window);
 		}
         
         inline void comm_kernel_lt_rma_raccumulate(GraphElem const& size)
 		{
-			MPI_Win_fence(0, window);
 			for (int p = 0; p < outdegree_; p++)
 			{
                 MPI_Raccumulate(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, MPI_REPLACE, window, sreq_ + p);
 			}
 			MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
-			MPI_Win_fence(0, window);
+            MPI_Win_flush_all(window);
 		}
 		
 		inline void comm_kernel_lt_rma(GraphElem const& size, GraphElem const& npairs, 
@@ -1785,6 +1797,7 @@ class Comm
         MPI_Request *sreq_, *rreq_;
 	   char *rbuf2_;
         MPI_Win window;
+        char *shmem_window;
 
         // ranges
         GraphElem max_size_, min_size_, large_msg_size_;

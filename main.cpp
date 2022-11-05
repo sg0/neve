@@ -69,6 +69,7 @@ static bool randomNumberLCG = false;
 static bool fallAsleep = false;
 
 static int lttOption = 0, performWork = 0;
+static int pOption = 0;
 static bool performBWTest = false;
 static bool performBWTestRMA = false;
 static bool performLTTest = false;
@@ -94,6 +95,7 @@ int main(int argc, char **argv)
 {
     double t0, t1, td, td0, td1;
 
+    shmem_init();
     MPI_Init(&argc, &argv);
 #if defined(SCOREP_USER_ENABLE)
     SCOREP_RECORDING_OFF();
@@ -399,23 +401,23 @@ void parseCommandLine(int argc, char** const argv)
           performBWTest = true;
       break;
     case 't':
-      lttOption = atoi(optarg);
-      if (lttOption == 0)
+      pOption = atoi(optarg);
+      if (pOption == 0)
           // use nonblocking Send/Recv
           performLTTest = true;
-      else if (lttOption == 1)
+      else if (pOption == 1)
           // use MPI_Neighbor_alltoall
           performLTTestNbrAlltoAll = true;
-      else if (lttOption == 2)
+      else if (pOption == 2)
           // use MPI_Neighbor_allgather
           performLTTestNbrAllGather = true;
-      else if (lttOption == 3)
+      else if (pOption == 3)
           // use MPI RMA with Rput
           performLTTestRMA_Rput = true;
-      else if (lttOption == 4)
+      else if (pOption == 4)
           // use MPI RMA with Rget
           performLTTestRMA_Rget = true;
-      else if (lttOption == 5)
+      else if (pOption == 5)
           // use MPI RMA with Raccumulate
           performLTTestRMA_Raccumulate = true;
       else
@@ -451,7 +453,7 @@ void parseCommandLine(int argc, char** const argv)
       break;
     }
   }
-
+std::cout << "LTTOPTIOBN" << pOption << std::endl;
   // warnings/info
   if (me == 0 && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather || performLTTestRMA_Rput || performLTTestRMA_Rget || performLTTestRMA_Raccumulate) && maxNumGhosts) 
   {
