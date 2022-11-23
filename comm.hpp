@@ -486,6 +486,20 @@ class Comm
         }
 
 #if defined(USE_SHMEM_FOR_RMA)
+        inline void comm_kernel_lt_rma_rput_signal(GraphElem const& size)
+        {
+            uint64_t *signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_);
+            for (int p = 0; p < outdegree_; p++)
+            {
+                // shmemx_char_put_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
+                shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
+
+            }
+            for (int i = 0; i < outdegree_; i ++)
+            {
+                shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
+            }
+        }
         inline void comm_kernel_lt_rma_rput(GraphElem const& size)
         {
             shmem_barrier_all();
