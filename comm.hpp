@@ -46,7 +46,7 @@
 #include <utility>
 #include <cstring>
 #include <iomanip>
-#include <mpp/shmem.h>
+#include "mpp/shmem.h"
 
 #if defined(SCOREP_USER_ENABLE)
 #include <scorep/SCOREP_User.h>
@@ -154,18 +154,19 @@ class Comm
             assert(out_nghosts_ >= outdegree_); \
             sreq_ = new MPI_Request[out_nghosts_]; \
             rreq_ = new MPI_Request[in_nghosts_]; \
-		  MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
-		      comm_, &rbuf2_, &window); \
+          MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
+              comm_, &rbuf2_, &window); \
             shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
+            signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_); \
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
-	    if (lne > 1000) \
+        if (lne > 1000) \
             { \
                 if (bw_loop_count_ == BW_LOOP_COUNT) \
                     bw_loop_count_ = bw_loop_count_large_; \
                 if (bw_skip_count_ == BW_SKIP_COUNT) \
                     bw_skip_count_ = bw_skip_count_large_; \
             } \
-	    a2a_send_dat.clear(); \
+        a2a_send_dat.clear(); \
             a2a_recv_dat.clear(); \
             /* create graph topology communicator for neighbor collectives */ \
             MPI_Dist_graph_create_adjacent(comm_, sources_.size(), sources_.data(), \
@@ -470,29 +471,35 @@ class Comm
         // kernel for latency using MPI Isend/Irecv
         inline void comm_kernel_lt(GraphElem const& size)
 	{
-	    for (int p = 0; p < indegree_; p++)
-	    {
-		MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
-	    }
-
-	    
-            for (int p = 0; p < outdegree_; p++)
-	    {
-		MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
-	    }
-
-            MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
-            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+//	    for (int p = 0; p < indegree_; p++)
+//	    {
+//		MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
+//	    }
+//
+//	    
+//            for (int p = 0; p < outdegree_; p++)
+//	    {
+//		MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
+//	    }
+//
+//            MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
+//            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
         }
 
 #if defined(USE_SHMEM_FOR_RMA)
         inline void comm_kernel_lt_rma_rput_signal(GraphElem const& size)
         {
-            uint64_t *signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_);
             for (int p = 0; p < outdegree_; p++)
             {
                 // shmemx_char_put_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
+#if defined(CRAY_SHMEM)
                 shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
+#else
+                // OpenSHMEM's signal routines require the sig_op parameter to indiate whether
+                // an update to a signal data object is a set or an add.
+                // http://www.openshmem.org/site/sites/default/site_files/openshmem-1.5rc2.pdf
+                shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
+#endif
 
             }
             for (int i = 0; i < outdegree_; i ++)
@@ -502,6 +509,8 @@ class Comm
         }
         inline void comm_kernel_lt_rma_rput(GraphElem const& size)
         {
+            // DELET DIS
+            std::cout << "hello! got here" << std::endl;
             shmem_barrier_all();
             for (int p = 0; p < outdegree_; p++)
             {
@@ -512,7 +521,7 @@ class Comm
 #else
         inline void comm_kernel_lt_rma_rput(GraphElem const& size)
         {
-		    for (int p = 0; p < outdegree_; p++)
+            for (int p = 0; p < outdegree_; p++)
             {
                 MPI_Rput(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
             }
@@ -1809,9 +1818,10 @@ class Comm
 
         char *sbuf_, *rbuf_;
         MPI_Request *sreq_, *rreq_;
-	   char *rbuf2_;
+        char *rbuf2_;
         MPI_Win window;
         char *shmem_window;
+        uint64_t *signals;
 
         // ranges
         GraphElem max_size_, min_size_, large_msg_size_;

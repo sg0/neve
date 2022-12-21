@@ -96,7 +96,7 @@ int main(int argc, char **argv)
     double t0, t1, td, td0, td1;
 
     shmem_init();
-    MPI_Init(&argc, &argv);
+//    MPI_Init(&argc, &argv);
 #if defined(SCOREP_USER_ENABLE)
     SCOREP_RECORDING_OFF();
 #endif
@@ -317,12 +317,12 @@ int main(int argc, char **argv)
             }
 		  if (performLTTestRMA_Rget)
             {
-                // run p2p_lt using RMA Rput
+                // run p2p_lt using RMA Rget
                 c.p2p_lt(4);
             }
 		  if (performLTTestRMA_Raccumulate)
             {
-                // run p2p_lt using RMA Rput
+                // run p2p_lt using RMA Raccumulate
                 c.p2p_lt(5);
             }
         }
@@ -349,6 +349,7 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
    
     MPI_Finalize();
+//    shmem_finalize();
 
     return 0;
 }
