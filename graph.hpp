@@ -68,12 +68,12 @@ class Graph
     public:
         Graph(): nv_(-1), ne_(-1),
                  edge_indices_(nullptr), edge_list_(nullptr),
-                 vertex_degree_(nullptr), edge_weights_(nullptr)
+                 vertex_degree_(nullptr)
         {}
                 
         Graph(GraphElem nv): 
             nv_(nv), ne_(-1), 
-            edge_list_(nullptr), edge_weights_(nullptr)
+            edge_list_(nullptr)
         {
             edge_indices_   = new GraphElem[nv_+1];
             vertex_degree_  = new GraphWeight[nv_];
@@ -85,14 +85,12 @@ class Graph
             edge_indices_   = new GraphElem[nv_+1];
             edge_list_      = new Edge[ne_];
             vertex_degree_  = new GraphWeight[nv_];
-            edge_weights_   = new GraphWeight[ne_];
         }
 
         ~Graph() 
         {
             delete []edge_indices_;
             delete []edge_list_;
-            delete []edge_weights_;
             delete []vertex_degree_;
         }
          
@@ -118,7 +116,6 @@ class Graph
         { 
             ne_ = ne; 
             edge_list_      = new Edge[ne_];
-            edge_weights_   = new GraphWeight[ne_];
         }
 
         GraphElem get_nv() const { return nv_; }
@@ -165,8 +162,51 @@ class Graph
             }
         }
 
+	void flush()
+	{ std::memset(vertex_degree_, 0, nv_*sizeof(GraphWeight)); }
+
         // Memory: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
-        inline void nbrscan() 
+#if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+	inline void nbrscan()
+	{
+#pragma omp parallel
+		{
+#ifdef LIKWID_MARKER_ENABLE
+			LIKWID_MARKER_START("nbrscan_zfill");
+#endif
+			int const tid = omp_get_thread_num();
+			int const nthreads = omp_get_num_threads();
+			size_t chunk = nv_ / nthreads;
+			size_t rem = 0;
+			if (tid == nthreads - 1)
+				rem += nv_ % nthreads;
+
+			GraphWeight * const zfill_limit = vertex_degree_ + (tid+1)*chunk + rem - ZFILL_OFFSET;
+
+#pragma omp for schedule(static)
+			for (GraphElem i=0; i < nv_; i+=ELEMS_PER_CACHE_LINE) {
+							
+				GraphElem const * __restrict__ const edge_indices = edge_indices_ + i;
+				GraphWeight * __restrict__ const vertex_degree = vertex_degree_ + i;
+				
+				if (vertex_degree + ZFILL_OFFSET < zfill_limit)
+					zfill(vertex_degree + ZFILL_OFFSET);
+
+				for(GraphElem j = 0; j < ELEMS_PER_CACHE_LINE; j++) { 
+				       if ((i + j) >= nv_)
+					       break;
+					for (GraphElem e = edge_indices[j]; e < edge_indices[j+1]; e++) {
+						vertex_degree[j] = edge_list_[e].weight_;
+					}
+				}
+			}
+#ifdef LIKWID_MARKER_ENABLE
+			LIKWID_MARKER_STOP("nbrscan_zfill");
+#endif
+		} // parallel
+	}
+#else  
+	inline void nbrscan() 
         {
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_BEGIN("nbrscan");
@@ -175,7 +215,7 @@ class Graph
             GraphElem e0, e1;
 #ifdef ENABLE_PREFETCH
 #ifdef __INTEL_COMPILER
-#pragma noprefetch edge_weights_
+#pragma noprefetch vertex_degree_
 #pragma prefetch edge_indices_:3
 #pragma prefetch edge_list_:3
 #endif
@@ -189,8 +229,13 @@ class Graph
 #elif defined USE_OMP_TASKS_FOR
 #pragma omp parallel
 #pragma omp for
+#elif defined LIKWID_MARKER_ENABLE
+#pragma omp parallel
+    {
+        LIKWID_MARKER_START("nbrscan");
+#pragma omp for schedule(static)
 #else
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
 #endif
             for (GraphElem i = 0; i < nv_; i++)
             {
@@ -200,8 +245,7 @@ class Graph
 #endif
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
-                    Edge const& edge = edge_list_[e];
-                    edge_weights_[e] = edge.weight_;
+                    vertex_degree_[i] = edge_list_[e].weight_;
                 }
 #ifdef USE_OMP_TASKS_FOR
 		    }
@@ -211,10 +255,54 @@ class Graph
 	    CALI_MARK_END("parallel");
 	    CALI_MARK_END("nbrscan");
 #endif
+#ifdef LIKWID_MARKER_ENABLE
+            LIKWID_MARKER_STOP("nbrscan");
+    }
+#endif
         }
+#endif  
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
-        inline void nbrsum() 
+#if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+	inline void nbrsum()
+	{
+#pragma omp parallel
+		{
+#ifdef LIKWID_MARKER_ENABLE
+			LIKWID_MARKER_START("nbrsum_zfill");
+#endif
+			int const tid = omp_get_thread_num();
+			int const nthreads = omp_get_num_threads();
+			size_t chunk = nv_ / nthreads;
+			size_t rem = 0;
+			if (tid == nthreads - 1)
+				rem += nv_ % nthreads;
+
+			GraphWeight * const zfill_limit = vertex_degree_ + (tid+1)*chunk + rem - ZFILL_OFFSET;
+
+#pragma omp for schedule(static)
+			for (GraphElem i=0; i < nv_; i+=ELEMS_PER_CACHE_LINE) {
+				GraphElem const * __restrict__ const edge_indices = edge_indices_ + i;
+				GraphWeight * __restrict__ const vertex_degree = vertex_degree_ + i;
+
+				if (vertex_degree + ZFILL_OFFSET < zfill_limit)
+					zfill(vertex_degree + ZFILL_OFFSET);
+
+				for(GraphElem j = 0; j < ELEMS_PER_CACHE_LINE; j++) { 
+					if ((i + j) >= nv_)
+						break;
+					for (GraphElem e = edge_indices[j]; e < edge_indices[j+1]; e++) {
+						vertex_degree[j] += edge_list_[e].weight_;
+					}
+				}
+			}
+#ifdef LIKWID_MARKER_ENABLE
+			LIKWID_MARKER_STOP("nbrsum_zfill");
+#endif
+		} // parallel
+	}
+#else 
+	inline void nbrsum() 
         {
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_BEGIN("nbrsum");
@@ -237,8 +325,13 @@ class Graph
 #elif defined USE_OMP_TASKS_FOR
 #pragma omp parallel
 #pragma omp for
+#elif defined LIKWID_MARKER_ENABLE
+#pragma omp parallel
+    {
+        LIKWID_MARKER_START("nbrsum");
+#pragma omp for schedule(static)
 #else
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
 #endif
             for (GraphElem i = 0; i < nv_; i++)
             {
@@ -248,8 +341,7 @@ class Graph
 #endif
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
-                    Edge const& edge = edge_list_[e];
-                    vertex_degree_[i] += edge.weight_;
+                    vertex_degree_[i] += edge_list_[e].weight_;
                 }
 #ifdef USE_OMP_TASKS_FOR
 		    }
@@ -259,10 +351,58 @@ class Graph
 	    CALI_MARK_END("parallel");
 	    CALI_MARK_END("nbrsum");
 #endif
+#ifdef LIKWID_MARKER_ENABLE
+            LIKWID_MARKER_STOP("nbrsum");
+            }
+#endif
         }
+#endif
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
-        inline void nbrmax() 
+#if defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+	inline void nbrmax()
+	{
+#pragma omp parallel
+		{
+#ifdef LIKWID_MARKER_ENABLE
+			LIKWID_MARKER_START("nbrmax_zfill");
+#endif
+			int const tid = omp_get_thread_num();
+			int const nthreads = omp_get_num_threads();
+			size_t chunk = nv_ / nthreads;
+			size_t rem = 0;
+			if (tid == nthreads - 1)
+				rem += nv_ % nthreads;
+
+			GraphWeight * const zfill_limit = vertex_degree_ + (tid+1)*chunk + rem - ZFILL_OFFSET;
+
+#pragma omp for schedule(static)
+			for (GraphElem i=0; i < nv_; i+=ELEMS_PER_CACHE_LINE) {
+
+				GraphElem const * __restrict__ const edge_indices = edge_indices_ + i;
+				GraphWeight * __restrict__ const vertex_degree = vertex_degree_ + i;
+
+				if (vertex_degree + ZFILL_OFFSET < zfill_limit)
+					zfill(vertex_degree + ZFILL_OFFSET);
+
+				for(GraphElem j = 0; j < ELEMS_PER_CACHE_LINE; j++) { 
+					if ((i + j) >= nv_)
+						break;
+					GraphWeight wmax = -1.0;
+					for (GraphElem e = edge_indices[j]; e < edge_indices[j+1]; e++) {
+						if (wmax < edge_list_[e].weight_)
+							wmax = edge_list_[e].weight_;
+					}
+					vertex_degree[j] = wmax;
+				}
+			}
+#ifdef LIKWID_MARKER_ENABLE
+			LIKWID_MARKER_STOP("nbrmax_zfill");
+#endif
+		} // parallel
+	}
+#else 
+	inline void nbrmax() 
         {
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_BEGIN("nbrmax");
@@ -285,8 +425,13 @@ class Graph
 #elif defined USE_OMP_TASKS_FOR
 #pragma omp parallel
 #pragma omp for
+#elif defined LIKWID_MARKER_ENABLE
+#pragma omp parallel
+   {
+     LIKWID_MARKER_START("nbrmax");
+#pragma omp for schedule(static)
 #else
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
 #endif
             for (GraphElem i = 0; i < nv_; i++)
             {
@@ -297,9 +442,8 @@ class Graph
                 GraphWeight wmax = -1.0;
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
-                    Edge const& edge = edge_list_[e];
-                    if (wmax < edge.weight_)
-                        wmax = edge.weight_;
+                    if (wmax < edge_list_[e].weight_)
+                        wmax = edge_list_[e].weight_;
                 }
                 vertex_degree_[i] = wmax;
 #ifdef USE_OMP_TASKS_FOR
@@ -310,8 +454,12 @@ class Graph
 	    CALI_MARK_END("parallel");
 	    CALI_MARK_END("nbrmax");
 #endif
+#ifdef LIKWID_MARKER_ENABLE
+            LIKWID_MARKER_STOP("nbrmax");
+          }
+#endif
         }
-
+#endif
         
 	// print statistics about edge distribution
         void print_stats()
@@ -361,7 +509,7 @@ class Graph
         // public variables
         GraphElem *edge_indices_;
         Edge *edge_list_;
-        GraphWeight *edge_weights_, *vertex_degree_;
+        GraphWeight *vertex_degree_;
     private:
         GraphElem nv_, ne_;
 };

@@ -1,4 +1,6 @@
+#CXX = armclang++
 CXX = g++
+#CXX = FCC
 MPICXX = mpicxx
 
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
@@ -7,14 +9,18 @@ OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
 #  add extra edges randomly on a generated graph
 # use export ASAN_OPTIONS=verbosity=1 to check ASAN output
 SNTFLAGS = -std=c++11 -fsanitize=address -O1 -fno-omit-frame-pointer
-#CXXFLAGS = -std=c++11 -g -I. $(OPTFLAGS)
-CXXFLAGS = -g -I. $(OPTFLAGS)
-CXXFLAGS_THREADS = -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
+CXXFLAGS = -std=c++11 -g -I. $(OPTFLAGS)
+#CXXFLAGS = -ggdb -I. $(OPTFLAGS)
+#CXXFLAGS_THREADS = -fopenmp -mcpu=a64fx -armpl -Rpass=loop-vectorize -Rpass-analysis=loop-vectorize -DZFILL_CACHE_LINES -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
+#CXXFLAGS_THREADS = -fopenmp -mcpu=a64fx -DZFILL_CACHE_LINES -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
+CXXFLAGS_THREADS = -fopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-march=armv8.2-a+sve -mcpu=a64fx -mtune=a64fx #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
+#CXXFLAGS_THREADS = -march=armv8.2-a+sve -Kfast -Khpctag -Kopenmp -DUSE_SHARED_MEMORY -DGRAPH_FT_LOAD=4 -DNTIMES=20 #-DEDGE_AS_VERTEX_PAIR #-DENABLE_PREFETCH 
 CXXFLAGS_MPI = 
-
-FUGAKU_HOSTMAP_SPEC=0
-ifeq ($(FUGAKU_HOSTMAP_SPEC),1)
-CXXFLAGS += -DGEN_FUGAKU_HOSTMAP
+#LDFLAGS += -armpl
+ENABLE_LIKWID_PERFMON=0
+ifeq ($(ENABLE_LIKWID_PERFMON),1)
+       CXXFLAGS_THREADS	+= -DLIKWID_MARKER_ENABLE -DLIKWID_PERFMON -I/lustre/software/likwid/5.1.1/include
+       LDFLAGS = -L/lustre/software/likwid/5.1.1/lib -llikwid
 endif
 
 ENABLE_DUMPI_TRACE=0

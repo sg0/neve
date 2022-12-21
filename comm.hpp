@@ -470,20 +470,20 @@ class Comm
        
         // kernel for latency using MPI Isend/Irecv
         inline void comm_kernel_lt(GraphElem const& size)
-	{
-//	    for (int p = 0; p < indegree_; p++)
-//	    {
-//		MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
-//	    }
-//
-//	    
-//            for (int p = 0; p < outdegree_; p++)
-//	    {
-//		MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
-//	    }
-//
-//            MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
-//            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+        {
+          for (int p = 0; p < indegree_; p++)
+          {
+            MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
+          }
+
+
+          for (int p = 0; p < outdegree_; p++)
+          {
+            MPI_Isend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
+          }
+
+          MPI_Waitall(indegree_, rreq_, MPI_STATUSES_IGNORE);
+          MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
         }
 
 #if defined(USE_SHMEM_FOR_RMA)
@@ -552,6 +552,39 @@ class Comm
 		
 		inline void comm_kernel_lt_rma(GraphElem const& size, GraphElem const& npairs, 
                 MPI_Comm gcomm, int const& me){}
+         
+        // kernel for latency using MPI Isend/Irecv using 
+        // nonblocking consensus
+        inline void comm_kernel_lt_nbx(GraphElem const& size)
+        {
+          for (int p = 0; p < indegree_; p++)
+          {
+            MPI_Irecv(rbuf_, size, MPI_CHAR, sources_[p], 100, comm_, rreq_ + p);
+          }
+
+          for (int p = 0; p < outdegree_; p++)
+          {
+            MPI_Issend(sbuf_, size, MPI_CHAR, targets_[p], 100, comm_, sreq_ + p);
+          }
+                 
+          bool done = false, nbar_active = false; 
+          MPI_Request nbar_req = MPI_REQUEST_NULL;
+          while (!done)
+          {
+            if (nbar_active)
+            {
+              int test_nbar = -1;
+              MPI_Test(&nbar_req, &test_nbar, MPI_STATUS_IGNORE);
+              done = !test_nbar ? false : true;
+            }
+            else
+            {
+              MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+              MPI_Ibarrier(comm_, &nbar_req);
+              nbar_active = true;
+            }
+          }
+        }
 
 #if defined(TEST_LT_MPI_PROC_NULL) 
 	// same as above, but replaces target with MPI_PROC_NULL to 
@@ -717,7 +750,51 @@ class Comm
             MPI_Waitall(in_nghosts_, rreq_, MPI_STATUSES_IGNORE);
             MPI_Waitall(out_nghosts_, sreq_, MPI_STATUSES_IGNORE);
         }
-        
+  	
+        // kernel for bandwidth using NBX 
+        inline void comm_kernel_bw_nbx(GraphElem const& size)
+        {
+          GraphElem rng = 0, sng = 0;
+
+          // prepost recvs
+          for (int p = 0; p < indegree_; p++)
+          {
+            for (GraphElem g = 0; g < nghosts_in_source_[p]; g++)
+            {
+              MPI_Irecv(&rbuf_[rng*size], size, MPI_CHAR, sources_[p], g, comm_, rreq_ + rng);
+              rng++;
+            }
+          }
+
+          // sends
+          for (int p = 0; p < outdegree_; p++)
+          {
+            for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
+            {
+              MPI_Isend(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], g, comm_, sreq_+ sng);
+              sng++;
+            }
+          }
+
+          bool done = false, nbar_active = false; 
+          MPI_Request nbar_req = MPI_REQUEST_NULL;
+          while (!done)
+          {
+            if (nbar_active)
+            {
+              int test_nbar = -1;
+              MPI_Test(&nbar_req, &test_nbar, MPI_STATUS_IGNORE);
+              done = !test_nbar ? false : true;
+            }
+            else
+            {
+              MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+              MPI_Ibarrier(comm_, &nbar_req);
+              nbar_active = true;
+            }
+          }
+        }
+      
         // kernel for bandwidth with extra input parameters and 
         // out of order receives
         inline void comm_kernel_bw(GraphElem const& size, GraphElem const& npairs, 
