@@ -238,10 +238,112 @@ class CSR
         { return edge_list_[index]; }
          
         Edge& get_edge(GraphElem const index)
-        { return edge_list_[index]; }        
+        { return edge_list_[index]; }
+        
+        int write_to_file2(std::string filename)
+        {
+            
+            std::ofstream ofs(filename.c_str(), std::ofstream::out | std::ofstream::binary |
+            std::ofstream::trunc);
+            
+            if (!ofs) {
+                std::cerr << "Error opening output file: " << filename << std::endl;
+                exit(EXIT_FAILURE);
+            } else {
+                std::cout << "Writing to file: " << filename << std::endl;
+            }
+
+            ofs.write(reinterpret_cast<char *>(&nv_), sizeof(GraphElem));
+            ofs.write(reinterpret_cast<char *>(&ne_), sizeof(GraphElem));
+            
+            ofs.write(reinterpret_cast<char *>(edge_indices_), (nv_+1)*sizeof(GraphElem));
+            
+            for (GraphElem v = 0; v < nv_; v ++) {
+                GraphElem e0, e1;
+                
+                edge_range(v, e0, e1);
+                
+                for (GraphElem j = e0; j < e1; j ++) {
+                    const Edge &edge = get_edge(j);
+                    ofs.write(reinterpret_cast<const char *>(&edge), sizeof(Edge));
+                }
+            }
+            
+            ofs.close();
+            return 0;     
+        }
+        
+        int write_to_file(std::string filename)
+        {
+            printf("ne_: %d\nedge_list_: ", ne_);
+            for (int i = 0 ; i < ne_; i++) {
+                printf("%d, ", edge_list_[i]);
+            }
+            printf("\nnv_: %d\nedge_indices_: ", nv_);
+            for (int i = 0 ; i < nv_; i++) {
+                printf("%d, ", edge_indices_[i]);
+            }
+            // get list of nodes and their degrees
+
+            
+            size_t vertices_offset = 0;
+            size_t edges_offset = vertices_offset + sizeof(GraphElem);
+            
+            
+            struct edge_pair {
+                GraphElem vtxid_src, vtxid_tgt;
+            } *edge_list = (edge_pair *)calloc((int32_t)ne_, sizeof(edge_pair));
+            
+//            struct edge_pair {
+//                GraphElem edge_tail;
+//                GraphWeight edge_weight;
+//            } *edge_list = (edge_pair *)calloc((int32_t)ne_, sizeof(edge_pair));
+            
+            struct edge_data {
+                GraphElem vtxid, degree;
+            } *vertex_degrees = (edge_data *)calloc((int32_t)nv_, sizeof(edge_data));
+            
+            int row_pointer_index = 0;
+            for (int i = 0; i < nv_; i++) {
+                vertex_degrees[i].vtxid = i;
+            } 
+            for (int i = 0; i < ne_; i++) {
+                if (i == edge_indices_[row_pointer_index]) {
+                    row_pointer_index ++;
+                }
+                printf("index %d was %d\n", edge_list_[i].tail_, vertex_degrees[edge_list_[i].tail_].degree);
+                vertex_degrees[edge_list_[i].tail_].degree ++;
+                printf("incrementing index %d, now its %d\n", edge_list_[i].tail_, vertex_degrees[edge_list_[i].tail_].degree);
+                edge_list[i].vtxid_src = row_pointer_index - 1;
+                edge_list[i].vtxid_tgt = edge_list_[i].tail_;
+                printf("edge between %d and %d\n", row_pointer_index - 1, edge_list_[i].tail_);
+            }
+            
+            GraphElem *contents;
+            int num_elements = 2 + nv_ * 2 + ne_ * 2;
+            contents = (GraphElem *)(malloc(sizeof(GraphElem) * num_elements));
+            
+            contents[0] = nv_;
+            contents[1] = ne_;
+            memcpy(&contents[2], vertex_degrees, sizeof(struct edge_data) * nv_);
+            memcpy(&contents[nv_ * 2 + 2], edge_list, sizeof(struct edge_pair) * ne_);
+            for (int i = 0; i < num_elements; i ++) {
+                printf("contents[%d] is %d\n", i, contents[i]);
+            }
+
+            for (int i = 0; i < nv_; i++) {
+                printf("vertex degree for vertex %d is %d\n", i, vertex_degrees[i].degree);
+            }
+
+            FILE *file = fopen(filename.c_str(), "wb");
+            fwrite(contents, sizeof(GraphElem), num_elements, file);
+            fclose(file);
+            
+            return 1;
+        }
         
         GraphElem *edge_indices_;
-        Edge *edge_list_;        
+        Edge *edge_list_;
     private:
         GraphElem nv_, ne_;
 };

@@ -1377,7 +1377,7 @@ class Graph
             rdispls.clear();
         }
         
-        void matching_rank_order() const
+        void matching_rank_order(std::string outputFileName, bool writeOutputFile) const
         {
             std::vector<GraphElem> nbr_pes, ng_pes;
 	          std::string outfile = "NEVE_MATCHING_MPI_RANK_ORDER." + std::to_string(size_); 
@@ -1495,6 +1495,8 @@ class Graph
                     pos++;
                 }
             }
+            if (rank_ == 0 && writeOutputFile)
+                pg->write_to_file2(outputFileName);
 
             // Invoke matching on weighted process graph, pg
             std::vector<GraphElem> pe_list, pe_map, pe_list_nodup;
@@ -1622,7 +1624,7 @@ class BinaryEdgeList
             MPI_File_read_all(fh, &M_, sizeof(GraphElem), MPI_BYTE, &status);
             MPI_File_read_all(fh, &N_, sizeof(GraphElem), MPI_BYTE, &status);
             M_local_ = ((M_*(me + 1)) / nprocs) - ((M_*me) / nprocs); 
-
+printf("debug m: %d, n: %d\n", M_, N_);
             // create local graph
             Graph *g = new Graph(M_local_, 0, M_, N_);
 

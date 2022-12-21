@@ -185,7 +185,8 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
 15. -o <1|2|3>      : Generates comma-separated (default) MPI rank order based on graph distribution across 
                       processes - regular (1), weighted (2) and graph matching (3). We also support Fugaku-style
                       host map file, please see FUGAKU_HOSTMAP_SPEC in Makefile (this option is buggy currently,
-		      and suppressed through #error).  
+		      and suppressed through #error).
+16. -a <filename>    : Writes the process graph to filename.               
 
 [*]Note: Unless -w or -t <...> is passed, the code will just load the graph and create the graph data 
 structure. This is deliberate, in case we want to measure the overhead of loading a graph and 
