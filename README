@@ -154,12 +154,13 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
                       0: Nonblocking send/recv (default if protocol unspecified)
                       1: MPI RMA with communication function determined by macro definitions
 8.  -t <protocol>   : Report Latency in microseconds[*]. protocol can be any of
-                      0: Nonblocking send/recv (default if protocol unspecified)
+                      0: Nonblocking send/recv
                       1: MPI_Neighbor_alltoall
                       2: MPI_Neighbor_allgather
                       3: MPI RMA with MPI_Rput
-                      4: MPI RMA with MPI_Rget
-                      5: MPI RMA with MPI_Raccumulate
+                      4: MPI with nonblocking consensus
+                      5: SHMEM with barrier
+                      6: SHMEM with put_signal
 9.  -x <bytes>      : Maximum data exchange size (in bytes).
 10. -m <bytes>      : Minimum data exchange size (in bytes).
 11. -d <0|1>        : Perform work in addition to message exchanges (for latency test, i.e., option `-t <>`) 
@@ -177,15 +178,15 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
                       distributed across 4 processes, and PE#0 has two neighbors, PE#1 and PE#3
                       with whom it shares a 100 ghost vertices each. In such a configuration, 
                       the b/w test would perform variable-sized message exchanges a 100 times 
-		      between PE#0 and {PE#1, PE#3}. The -z <percent> option can limit the 
+                      between PE#0 and {PE#1, PE#3}. The -z <percent> option can limit the 
                       number of message exchanges by selecting a percentage of the actual the number 
                       of ghosts, but maintaining the overall structure of the original graph. 
                       Hence, this option can help 'shrink' a graph. Only valid for b/w test, because
-		      latency test will just perform message transfers between process neighborhoods.
+                      latency test will just perform message transfers between process neighborhoods.
 15. -o <1|2|3>      : Generates comma-separated (default) MPI rank order based on graph distribution across 
                       processes - regular (1), weighted (2) and graph matching (3). We also support Fugaku-style
                       host map file, please see FUGAKU_HOSTMAP_SPEC in Makefile (this option is buggy currently,
-		      and suppressed through #error).
+                      and suppressed through #error).
 16. -a <filename>    : Writes the process graph to filename.               
 
 [*]Note: Unless -w or -t <...> is passed, the code will just load the graph and create the graph data 

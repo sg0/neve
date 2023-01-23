@@ -70,18 +70,13 @@ static bool hardSkip = false;
 static bool randomNumberLCG = false;
 static bool fallAsleep = false;
 
-static int lttOption = 0, performWork = 0;
-static int pOption = 0;
+static int bwOption = 0, performWork = 0;
+static int lttOption = -1; // default: no latency test
 static bool performBWTest = false;
 static bool performBWTestRMA = false;
 static bool performLTTest = false;
 static bool performWorkMax = false;
 static bool performWorkSum = false;
-static bool performLTTestNbrAlltoAll = false;
-static bool performLTTestNbrAllGather = false;
-static bool performLTTestRMA_Rput = false;
-static bool performLTTestRMA_Rget = false;
-static bool performLTTestRMA_Raccumulate = false;
 static bool createRankOrder = false;
 static int rankOrderType = 0;
 
@@ -188,7 +183,7 @@ int main(int argc, char **argv)
                 << nvRGG << " vertices (in s): " << tdt << std::endl;
     }
     
-    if (performBWTest || performBWTestRMA || performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather || performLTTestRMA_Rput || performLTTestRMA_Rget || performLTTestRMA_Raccumulate)
+    if (performBWTest || performBWTestRMA || lttOption != -1)
     {
         // Comm object can be instantiated
         // with iteration ranges and other 
@@ -204,7 +199,10 @@ int main(int argc, char **argv)
 
         t0 = MPI_Wtime();
 
-        // bandwidth test
+        // ---------------------------------------
+        // bandwidth tests
+        // ---------------------------------------
+        
         if (performBWTest) 
         {
             if (chooseSingleNbr)
@@ -233,102 +231,80 @@ int main(int argc, char **argv)
             else
                 c.p2p_bw(1);
         }
-
+        
+        // done with bandwidth tests
+        // ---------------------------------------
+        
+        
+        
+        // ---------------------------------------
         // latency tests
-        if (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather || performLTTestRMA_Rput || performLTTestRMA_Rget || performLTTestRMA_Raccumulate)
-        {
-            if (performLTTest) 
+        // ---------------------------------------
+        
+        if (chooseSingleNbr) {
+            // don't do the standard send/recv test later
+            lttOption = -1;
+            if (me == 0)
             {
-                if (chooseSingleNbr)
-                {
-                    if (me == 0)
-                    {
-                        std::cout << "Choosing the neighborhood of process #" << processNbr 
-                            << " for latency test." << std::endl;
-                    }
-                    c.p2p_lt_snbr(processNbr);
-                }
-                else {
-                    if (fallAsleep) {
-                        if (me == 0)
-                            std::cout << "Invoking (u)sleep for an epoch equal to #locally-owned-vertices" << std::endl;
-                        c.p2p_lt_usleep();
-                    }
-                    else if (performWorkSum) {
-                        if (me == 0)
-                            std::cout << "Invoking work performing degree sum for #locally-owned-vertices" << std::endl;
-                        c.p2p_lt_worksum();
-                    }
-                    else if (performWorkMax) {
-                        if (me == 0)
-                            std::cout << "Invoking work performing degree max for #locally-owned-vertices" << std::endl;
-                        c.p2p_lt_workmax();
-                    }
-                    else
-                        // run p2p_lt using nonblocking send/recv kernel
-                        c.p2p_lt(0);
-                }
+                std::cout << "Choosing the neighborhood of process #" << processNbr 
+                    << " for latency test." << std::endl;
             }
-
-            if (performLTTestNbrAlltoAll) 
-            {
-                if (chooseSingleNbr)
-                {
-                    if (me == 0)
-                    {
-                        std::cout << "Choosing the neighborhood of process #" << processNbr 
-                            << " for latency test (using MPI_Isend/Irecv)." << std::endl;
-                    }
-                    c.p2p_lt_snbr(processNbr);
-                }
-                else
-                {
-#ifndef SSTMAC
-                    c.nbr_ala_lt();
-#else
-#warning "SSTMAC is defined: MPI3 neighborhood collectives are turned OFF."
-#endif
-                }
-            }
-
-            if (performLTTestNbrAllGather) 
-            {
-                if (chooseSingleNbr)
-                {
-                    if (me == 0)
-                    {
-                        std::cout << "Choosing the neighborhood of process #" << processNbr 
-                            << " for latency test (using MPI_Isend/Irecv)." << std::endl;
-                    }
-                    c.p2p_lt_snbr(processNbr);
-                }
-                else
-                {
-#ifndef SSTMAC
-                    c.nbr_aga_lt();
-#else
-#warning "SSTMAC is defined: MPI3 neighborhood collectives are turned OFF."
-#endif
-                }
-            }
-            
-            if (performLTTestRMA_Rput)
-            {
-                // run p2p_lt using RMA Rput
-                c.p2p_lt(3);
-            }
-		  if (performLTTestRMA_Rget)
-            {
-                // run p2p_lt using RMA Rget
-                c.p2p_lt(4);
-            }
-		  if (performLTTestRMA_Raccumulate)
-            {
-                // run p2p_lt using RMA Raccumulate
-                c.p2p_lt(5);
-            }
+            c.p2p_lt_snbr(processNbr);
         }
-
+        
+        if (lttOption == 1 || lttOption == 2) {
+#if SSTMAC
+            lttOption = -1;
+#warning "SSTMAC is defined: MPI3 neighborhood collectives are turned OFF."
+#endif
+        }
+        
+        switch (lttOption) {
+        case 0: // Nonblocking send/recv
+            if (fallAsleep) {
+                if (me == 0)
+                    std::cout << "Invoking (u)sleep for an epoch equal to #locally-owned-vertices" << std::endl;
+                c.p2p_lt_usleep();
+            }
+            else if (performWorkSum) {
+                if (me == 0)
+                    std::cout << "Invoking work performing degree sum for #locally-owned-vertices" << std::endl;
+                c.p2p_lt_worksum();
+            }
+            else if (performWorkMax) {
+                if (me == 0)
+                    std::cout << "Invoking work performing degree max for #locally-owned-vertices" << std::endl;
+                c.p2p_lt_workmax();
+            }
+            else
+                // run p2p_lt using nonblocking send/recv kernel
+                c.p2p_lt(0);
+            break;
+            
+        case 1: // MPI_Neighbor_alltoall
+            c.nbr_ala_lt();
+            break;
+        case 2: // MPI_Neighbor_allgather
+            c.nbr_aga_lt();
+            break;
+        case 3: // MPI RMA with MPI_Rput
+            c.p2p_lt(3);
+            break;
+        case 4: // MPI with nonblocking consensus
+            c.p2p_lt(6);
+            break;
+        case 5: // SHMEM with barrier
+            c.p2p_lt(8);
+            break;
+        case 6: // SHMEM with put_signal
+            c.p2p_lt(7);
+            break;
+        default:
+            break;
+        }
+        
+        // done with latency tests
+        // ---------------------------------------
 
         MPI_Barrier(MPI_COMM_WORLD);
         t1 = MPI_Wtime();
@@ -393,38 +369,18 @@ void parseCommandLine(int argc, char** const argv)
       maxNumGhosts = atol(optarg);
       break;
     case 'w':
-      lttOption = atoi(optarg);
-      if (lttOption == 0)
+      bwOption = atoi(optarg);
+      if (bwOption == 0)
           // use nonblocking Send/Recv
           performBWTest = true;
-      else if (lttOption == 1)
+      else if (bwOption == 1)
           // use MPI_Neighbor_alltoall
           performBWTestRMA = true;
       else
           performBWTest = true;
       break;
     case 't':
-      pOption = atoi(optarg);
-      if (pOption == 0)
-          // use nonblocking Send/Recv
-          performLTTest = true;
-      else if (pOption == 1)
-          // use MPI_Neighbor_alltoall
-          performLTTestNbrAlltoAll = true;
-      else if (pOption == 2)
-          // use MPI_Neighbor_allgather
-          performLTTestNbrAllGather = true;
-      else if (pOption == 3)
-          // use MPI RMA with Rput
-          performLTTestRMA_Rput = true;
-      else if (pOption == 4)
-          // use MPI RMA with Rget
-          performLTTestRMA_Rget = true;
-      else if (pOption == 5)
-          // use MPI RMA with Raccumulate
-          performLTTestRMA_Raccumulate = true;
-      else
-          performLTTest = true;
+      lttOption = atoi(optarg);
       break;
     case 'd':
       performWork = atoi(optarg);
@@ -460,9 +416,9 @@ void parseCommandLine(int argc, char** const argv)
       break;
     }
   }
-std::cout << "LTTOPTIOBN" << pOption << std::endl;
+std::cout << "LTTOPTIOBN" << lttOption << std::endl;
   // warnings/info
-  if (me == 0 && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather || performLTTestRMA_Rput || performLTTestRMA_Rget || performLTTestRMA_Raccumulate) && maxNumGhosts) 
+  if (me == 0 && lttOption != -1 && maxNumGhosts) 
   {
       std::cout << "Setting the number of ghost vertices (-g <...>) has no effect for latency test."
           << std::endl;
@@ -485,12 +441,12 @@ std::cout << "LTTOPTIOBN" << pOption << std::endl;
       std::cout << "Graph shrinking (option -z) must be greater than 0.0. " << std::endl;
   }
 
-  if (me == 0 && shrinkGraph && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather || performLTTestRMA_Rput || performLTTestRMA_Rget || performLTTestRMA_Raccumulate))
+  if (me == 0 && shrinkGraph && lttOption != -1)
   {
 	  std::cout << "Graph shrinking is ONLY valid for bandwidth test, NOT latency test which just performs message exchanges across the process neighborhood of a graph." << std::endl;	  
   }
 
-  if (me == 0 && (performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather || performLTTestRMA_Rput || performLTTestRMA_Rget || performLTTestRMA_Raccumulate) && hardSkip)
+  if (me == 0 && lttOption != -1 && hardSkip)
   {
       std::cout << "The hard skip option to disable warmup and extra communication loops only affects the bandwidth test." << std::endl;
   }
@@ -500,9 +456,9 @@ std::cout << "LTTOPTIOBN" << pOption << std::endl;
       std::cout << "Passing -d <> has no effect unless -t <> is passed as well. In other words, work-option is enabled only for latency tests." << std::endl;
   }
   
-  if (me == 0 && chooseSingleNbr && (performLTTestNbrAlltoAll || performLTTestNbrAllGather))
+  if (me == 0 && chooseSingleNbr && lttOption != 0)
   {
-      std::cout << "At present, only MPI Isend/Irecv communication is supported when a single process's neighborhood is selected.." << std::endl;
+      std::cout << "At present, only MPI Isend/Irecv communication is supported when a single process's neighborhood is selected." << std::endl;
   }
   
   if (me == 0 && lttOption > 5)

@@ -486,8 +486,8 @@ class Comm
           MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
         }
 
-#if defined(USE_SHMEM_FOR_RMA)
-        inline void comm_kernel_lt_rma_rput_signal(GraphElem const& size)
+
+        inline void comm_kernel_lt_shmem_put_signal(GraphElem const& size)
         {
             for (int p = 0; p < outdegree_; p++)
             {
@@ -507,10 +507,9 @@ class Comm
                 shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
             }
         }
-        inline void comm_kernel_lt_rma_rput(GraphElem const& size)
+        
+        inline void comm_kernel_lt_shmem_barrier(GraphElem const& size)
         {
-            // DELET DIS
-            std::cout << "hello! got here" << std::endl;
             shmem_barrier_all();
             for (int p = 0; p < outdegree_; p++)
             {
@@ -518,7 +517,7 @@ class Comm
             }
             shmem_barrier_all();
         }
-#else
+
         inline void comm_kernel_lt_rma_rput(GraphElem const& size)
         {
             for (int p = 0; p < outdegree_; p++)
@@ -528,7 +527,6 @@ class Comm
             MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
             MPI_Win_flush_all(window);
         }
-#endif
         
         inline void comm_kernel_lt_rma_rget(GraphElem const& size)
 		{
@@ -1032,120 +1030,135 @@ class Comm
         }
         
         // Latency test using MPI Isend/Irecv
-        void p2p_lt(int type)
-        {
+        void p2p_lt(int type) {
             double t, t_start, t_end, sum_t = 0.0;
             int loop = lt_loop_count_, skip = lt_skip_count_;
-            
+        
             std::vector<double> plat(size_);
             int n99 = (int)std::ceil(0.99*size_);
-
+        
             // total communicating pairs
             int sum_npairs = outdegree_ + indegree_;
             MPI_Allreduce(MPI_IN_PLACE, &sum_npairs, 1, MPI_INT, MPI_SUM, comm_);
             sum_npairs /= 2;
-
-            if(rank_ == 0) 
-            {
-                std::cout << "--------------------------------" << std::endl;
-                std::cout << "----------Latency test----------" << std::endl;
-                std::cout << "--------------------------------" << std::endl;
-                std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)" 
-                    << std::setw(16) << "Max(us)" 
-                    << std::setw(16) << "99%(us)" 
-                    << std::setw(16) << "Variance" 
-                    << std::setw(15) << "STDDEV" 
-                    << std::setw(16) << "95% CI" 
-                    << std::endl;
+            
+            void (Comm::*ltt_kernel) (GraphElem const&);
+            char second_line[33];
+            
+    #if defined(TEST_LT_MPI_PROC_NULL)
+            // MPI_PROC_NULL
+            strcpy(second_line, "--Latency test (MPI_PROC_NULL)--");
+            ltt_kernel = &Comm::comm_kernel_lt_pnull;
+    #else
+            switch (type) {
+            case 0:
+                strcpy(second_line, "----------Latency test----------");
+                ltt_kernel = &Comm::comm_kernel_lt;
+                break;
+            case 3:
+                strcpy(second_line, "-------Latency test (Rput)------");
+                ltt_kernel = &Comm::comm_kernel_lt_rma_rput;
+                break;
+            case 4:
+                strcpy(second_line, "-------Latency test (Rget)------");
+                ltt_kernel = &Comm::comm_kernel_lt_rma_rget;
+                break;
+            case 5:
+                strcpy(second_line, "---Latency test (Raccumulate)---");
+                ltt_kernel = &Comm::comm_kernel_lt_rma_raccumulate;
+                break;
+            case 6:
+                strcpy(second_line, "-------Latency test (nbx)-------");
+                ltt_kernel = &Comm::comm_kernel_lt_nbx;
+                break;
+            case 7:
+                strcpy(second_line, "---Latency test (SHMEM signal)--");
+                ltt_kernel = &Comm::comm_kernel_lt_shmem_put_signal;
+                break;
+            case 8:
+                strcpy(second_line, "--Latency test (SHMEM barrier)--");
+                ltt_kernel = &Comm::comm_kernel_lt_shmem_barrier;
+                break;
             }
-
-	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
-            {      
+    #endif
+            
+            if(rank_ == 0) {
+                std::cout << "--------------------------------" << std::endl;
+                std::cout << second_line << std::endl;
+                std::cout << "--------------------------------" << std::endl;
+                std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)"
+                          << std::setw(16) << "Max(us)"
+                          << std::setw(16) << "99%(us)"
+                          << std::setw(16) << "Variance"
+                          << std::setw(15) << "STDDEV"
+                          << std::setw(16) << "95% CI"
+                          << std::endl;
+            }
+        
+            for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1)) {
                 touch_buffers(size);
                 MPI_Barrier(comm_);
-
-                if (size > large_msg_size_) 
-                {
+        
+                if (size > large_msg_size_) {
                     loop = lt_loop_count_large_;
                     skip = lt_skip_count_large_;
-		}
-                
-#if defined(SCOREP_USER_ENABLE)
-	        SCOREP_RECORDING_ON();
-		SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_Loop", SCOREP_USER_REGION_TYPE_COMMON);
-		if (rank_ == 0)
-			SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_WallTime_MainLoop", SCOREP_USER_REGION_TYPE_COMMON);
-#endif
+                }
+        
+        #if defined(SCOREP_USER_ENABLE)
+                SCOREP_RECORDING_ON();
+                SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_Loop", SCOREP_USER_REGION_TYPE_COMMON);
+                if (rank_ == 0)
+                    SCOREP_USER_REGION_BY_NAME_BEGIN("TRACER_WallTime_MainLoop", SCOREP_USER_REGION_TYPE_COMMON);
+        #endif
+        
                 // time communication kernel
-                for (int l = 0; l < loop + skip; l++) 
-                {           
-                    if (l == skip)
-                    {
+                for (int l = 0; l < loop + skip; l++) {
+                    if (l == skip) {
                         t_start = MPI_Wtime();
                         MPI_Barrier(comm_);
                     }
-                    
-#if defined(TEST_LT_MPI_PROC_NULL) 
-                    comm_kernel_lt_pnull(size);
-#else
-                    switch (type) {
-                        case 0:
-                            comm_kernel_lt(size);
-                            break;
-                        case 3:
-                            comm_kernel_lt_rma_rput(size);
-                            break;
-                        case 4:
-                            comm_kernel_lt_rma_rget(size);
-                            break;
-                        case 5:
-                            comm_kernel_lt_rma_raccumulate(size);
-                            break;
-                        
-                    }
-#endif
+                    (this->*ltt_kernel)(size);
                 }
-
-#if defined(SCOREP_USER_ENABLE)
-		  if (rank_ == 0)
-			  SCOREP_USER_REGION_BY_NAME_END("TRACER_WallTime_MainLoop");
-		  
-		  SCOREP_USER_REGION_BY_NAME_END("TRACER_Loop");
-		  SCOREP_RECORDING_OFF();
-#endif
+        
+        #if defined(SCOREP_USER_ENABLE)
+                if (rank_ == 0)
+                    SCOREP_USER_REGION_BY_NAME_END("TRACER_WallTime_MainLoop");
+        
+                SCOREP_USER_REGION_BY_NAME_END("TRACER_Loop");
+                SCOREP_RECORDING_OFF();
+        #endif
                 t_end = MPI_Wtime();
-                t = (t_end - t_start) * 1.0e6 / (double)loop; 
+                t = (t_end - t_start) * 1.0e6 / (double)loop;
                 double t_sq = t*t;
                 double sum_tsq = 0;
-                
+        
                 // execution time stats
                 MPI_Allreduce(&t, &sum_t, 1, MPI_DOUBLE, MPI_SUM, comm_);
                 MPI_Reduce(&t_sq, &sum_tsq, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
-
-		double avg_t = sum_t / (double) sum_npairs;
-		double avg_st = sum_t / (double) size_; // no. of observations
+        
+                double avg_t = sum_t / (double) sum_npairs;
+                double avg_st = sum_t / (double) size_; // no. of observations
                 double avg_tsq = sum_tsq / (double) size_;
                 double var = avg_tsq - (avg_st*avg_st);
                 double stddev  = sqrt(var);
-                
+        
                 double lmax = 0.0;
                 MPI_Reduce(&t, &lmax, 1, MPI_DOUBLE, MPI_MAX, 0, comm_);
                 MPI_Gather(&t, 1, MPI_DOUBLE, plat.data(), 1, MPI_DOUBLE, 0, comm_);
-                
-                if (rank_ == 0) 
-                {
+        
+                if (rank_ == 0) {
                     std::sort(plat.begin(), plat.end());
                     std::cout << std::setw(10) << size << std::setw(17) << avg_t
-                        << std::setw(16) << lmax/2.0
-                        << std::setw(16) << plat[n99-1]/2.0
-                        << std::setw(16) << var
-                        << std::setw(16) << stddev 
-                        << std::setw(16) << stddev * ZCI / sqrt((double)loop * sum_npairs) 
-                        << std::endl;
+                              << std::setw(16) << lmax/2.0
+                              << std::setw(16) << plat[n99-1]/2.0
+                              << std::setw(16) << var
+                              << std::setw(16) << stddev
+                              << std::setw(16) << stddev * ZCI / sqrt((double)loop * sum_npairs)
+                              << std::endl;
                 }
             }
             plat.clear();
-        } 
+        }
 
         // Latency test using MPI Isend/Irecv, including usleep
         void p2p_lt_usleep()
