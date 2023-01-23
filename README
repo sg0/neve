@@ -157,10 +157,11 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
                       0: Nonblocking send/recv
                       1: MPI_Neighbor_alltoall
                       2: MPI_Neighbor_allgather
-                      3: MPI RMA with MPI_Rput
-                      4: MPI with nonblocking consensus
-                      5: SHMEM with barrier
-                      6: SHMEM with put_signal
+                      3: MPI RMA with MPI_Rput using flush
+                      4: MPI RMA with MPI_Rput using fence
+                      5: MPI with nonblocking consensus
+                      6: SHMEM with barrier
+                      7: SHMEM with put_signal
 9.  -x <bytes>      : Maximum data exchange size (in bytes).
 10. -m <bytes>      : Minimum data exchange size (in bytes).
 11. -d <0|1>        : Perform work in addition to message exchanges (for latency test, i.e., option `-t <>`) 

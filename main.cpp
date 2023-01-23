@@ -93,7 +93,11 @@ int main(int argc, char **argv)
     double t0, t1, td, td0, td1;
 
     shmem_init();
-//    MPI_Init(&argc, &argv);
+#if defined(CRAY_SHMEM)
+    // Cray SHMEM requires that both inits get called.
+    // OpenSHMEM prohibits it.
+    MPI_Init(&argc, &argv);
+#endif
 #if defined(SCOREP_USER_ENABLE)
     SCOREP_RECORDING_OFF();
 #endif
@@ -287,17 +291,20 @@ int main(int argc, char **argv)
         case 2: // MPI_Neighbor_allgather
             c.nbr_aga_lt();
             break;
-        case 3: // MPI RMA with MPI_Rput
+        case 3: // MPI RMA with MPI_Rput using flush
             c.p2p_lt(3);
             break;
-        case 4: // MPI with nonblocking consensus
-            c.p2p_lt(6);
+        case 4: // MPI RMA with MPI_Rput using fence
+            c.p2p_lt(4);
             break;
-        case 5: // SHMEM with barrier
-            c.p2p_lt(8);
-            break;
-        case 6: // SHMEM with put_signal
+        case 5: // MPI with nonblocking consensus
             c.p2p_lt(7);
+            break;
+        case 6: // SHMEM with barrier
+            c.p2p_lt(9);
+            break;
+        case 7: // SHMEM with put_signal
+            c.p2p_lt(8);
             break;
         default:
             break;

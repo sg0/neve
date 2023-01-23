@@ -528,27 +528,32 @@ class Comm
             MPI_Win_flush_all(window);
         }
         
-        inline void comm_kernel_lt_rma_rget(GraphElem const& size)
-		{
-			for (int p = 0; p < outdegree_; p++)
-			{
-				MPI_Rget(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
-			}
-			MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
-            MPI_Win_flush_all(window);
-		}
+        inline void comm_kernel_lt_rma_rput_fence(GraphElem const& size) {
+            MPI_Win_fence(0, window);
+            for (int p = 0; p < outdegree_; p++) {
+                MPI_Rput(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
+            }
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+            MPI_Win_fence(0, window);
+        }
         
-        inline void comm_kernel_lt_rma_raccumulate(GraphElem const& size)
-		{
-			for (int p = 0; p < outdegree_; p++)
-			{
-                MPI_Raccumulate(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, MPI_REPLACE, window, sreq_ + p);
-			}
-			MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+        inline void comm_kernel_lt_rma_rget(GraphElem const& size) {
+            for (int p = 0; p < outdegree_; p++) {
+                MPI_Rget(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
+            }
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
             MPI_Win_flush_all(window);
-		}
-		
-		inline void comm_kernel_lt_rma(GraphElem const& size, GraphElem const& npairs, 
+        }
+        
+        inline void comm_kernel_lt_rma_raccumulate(GraphElem const& size) {
+            for (int p = 0; p < outdegree_; p++) {
+                MPI_Raccumulate(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, MPI_REPLACE, window, sreq_ + p);
+            }
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+            MPI_Win_flush_all(window);
+        }
+        
+        inline void comm_kernel_lt_rma(GraphElem const& size, GraphElem const& npairs, 
                 MPI_Comm gcomm, int const& me){}
          
         // kernel for latency using MPI Isend/Irecv using 
@@ -1056,26 +1061,30 @@ class Comm
                 ltt_kernel = &Comm::comm_kernel_lt;
                 break;
             case 3:
-                strcpy(second_line, "-------Latency test (Rput)------");
+                strcpy(second_line, "---Latency test (Rput - flush)--");
                 ltt_kernel = &Comm::comm_kernel_lt_rma_rput;
                 break;
             case 4:
+                strcpy(second_line, "---Latency test (Rput - fence)--");
+                ltt_kernel = &Comm::comm_kernel_lt_rma_rput_fence;
+                break;
+            case 5:
                 strcpy(second_line, "-------Latency test (Rget)------");
                 ltt_kernel = &Comm::comm_kernel_lt_rma_rget;
                 break;
-            case 5:
+            case 6:
                 strcpy(second_line, "---Latency test (Raccumulate)---");
                 ltt_kernel = &Comm::comm_kernel_lt_rma_raccumulate;
                 break;
-            case 6:
+            case 7:
                 strcpy(second_line, "-------Latency test (nbx)-------");
                 ltt_kernel = &Comm::comm_kernel_lt_nbx;
                 break;
-            case 7:
+            case 8:
                 strcpy(second_line, "---Latency test (SHMEM signal)--");
                 ltt_kernel = &Comm::comm_kernel_lt_shmem_put_signal;
                 break;
-            case 8:
+            case 9:
                 strcpy(second_line, "--Latency test (SHMEM barrier)--");
                 ltt_kernel = &Comm::comm_kernel_lt_shmem_barrier;
                 break;

@@ -277,11 +277,11 @@ class CSR
         {
             printf("ne_: %d\nedge_list_: ", ne_);
             for (int i = 0 ; i < ne_; i++) {
-                printf("%d, ", edge_list_[i]);
+//                printf("%d, ", edge_list_[i]);
             }
             printf("\nnv_: %d\nedge_indices_: ", nv_);
             for (int i = 0 ; i < nv_; i++) {
-                printf("%d, ", edge_indices_[i]);
+//                printf("%d, ", edge_indices_[i]);
             }
             // get list of nodes and their degrees
 
