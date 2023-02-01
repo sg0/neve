@@ -93,11 +93,12 @@ int main(int argc, char **argv)
     double t0, t1, td, td0, td1;
 
     shmem_init();
-#if defined(CRAY_SHMEM)
-    // Cray SHMEM requires that both inits get called.
-    // OpenSHMEM prohibits it.
-    MPI_Init(&argc, &argv);
-#endif
+    
+    int mpi_init;
+    MPI_Initialized(&mpi_init);
+    if (!mpi_init) {
+        MPI_Init(&argc, &argv);
+    }
 #if defined(SCOREP_USER_ENABLE)
     SCOREP_RECORDING_OFF();
 #endif
