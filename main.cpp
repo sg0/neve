@@ -55,6 +55,7 @@
 
 static std::string inputFileName;
 static std::string outputFileName;
+static bool graphIsProcessGraph = false;
 static bool writeOutputFile = false;
 static int me, nprocs;
 static int ranksPerNode = 1;
@@ -123,25 +124,34 @@ int main(int argc, char **argv)
     {   // read input graph
 #ifndef SSTMAC
         BinaryEdgeList rm;
-        if (readBalanced == true)
-        {
-            if (me == 0)
-            {
-                std::cout << std::endl;
-                std::cout << "Trying to balance the edge distribution (#edges/p) while reading: " << std::endl;
-                std::cout << inputFileName << std::endl;
-            }
-            g = rm.read_balanced(me, nprocs, ranksPerNode, inputFileName);
-        }
-        else
-        {
-            if (me == 0)
-            {
+        if (graphIsProcessGraph) {
+            if (me == 0) {
                 std::cout << std::endl;
                 std::cout << "Standard edge distribution (#vertices/p) while reading: " << std::endl;
                 std::cout << inputFileName << std::endl;
             }
             g = rm.read(me, nprocs, ranksPerNode, inputFileName);
+        } else {
+            if (readBalanced == true)
+            {
+                if (me == 0)
+                {
+                    std::cout << std::endl;
+                    std::cout << "Trying to balance the edge distribution (#edges/p) while reading: " << std::endl;
+                    std::cout << inputFileName << std::endl;
+                }
+                g = rm.read_balanced(me, nprocs, ranksPerNode, inputFileName);
+            }
+            else
+            {
+                if (me == 0)
+                {
+                    std::cout << std::endl;
+                    std::cout << "Standard edge distribution (#vertices/p) while reading: " << std::endl;
+                    std::cout << inputFileName << std::endl;
+                }
+                g = rm.read(me, nprocs, ranksPerNode, inputFileName);
+            }
         }
 #else
 #warning "SSTMAC is defined: Trying to load external graph binaries will FAIL."
@@ -334,8 +344,13 @@ int main(int argc, char **argv)
 
     MPI_Barrier(MPI_COMM_WORLD);
    
-    MPI_Finalize();
-//    shmem_finalize();
+    shmem_finalize();
+    
+    int mpi_final;
+    MPI_Finalized(&mpi_init);
+    if (!mpi_final) {
+         MPI_Finalize();
+    }
 
     return 0;
 }
@@ -345,10 +360,13 @@ void parseCommandLine(int argc, char** const argv)
   int ret;
   optind = 1;
 
-  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:w:s:z:ud:o:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:y:r:n:lhp:m:x:bg:t:w:s:z:ud:o:a:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
+      break;
+    case 'y':
+      graphIsProcessGraph = true;
       break;
     case 'b':
       readBalanced = true;
@@ -418,6 +436,7 @@ void parseCommandLine(int argc, char** const argv)
     case 'a':
       outputFileName.assign(optarg);
       writeOutputFile = true;
+      createRankOrder = true;
       break;
     default:
       assert(0 && "Should not reach here!!");
@@ -469,9 +488,15 @@ std::cout << "LTTOPTIOBN" << lttOption << std::endl;
       std::cout << "At present, only MPI Isend/Irecv communication is supported when a single process's neighborhood is selected." << std::endl;
   }
   
-  if (me == 0 && lttOption > 5)
+  if (me == 0 && lttOption > 7)
   {
       std::cout << "Valid values for latency test arguments are 0 (Isend/Irecv, the default case), 1 (Neighbor All-to-All), 2 (Neighbor All-Gather), and 3-5 (RMA)." << std::endl;
+  }
+  
+  if (me == 0 && graphIsProcessGraph && readBalanced)
+  {
+      std::cout << "Can't do a balanced read with a process graph. Ignoring -b." << std::endl;
+      readBalanced = false;
   }
 
   // errors
