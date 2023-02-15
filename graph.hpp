@@ -1167,6 +1167,8 @@ class Graph
                 }
             }
 
+            nbr_pes.insert(nbr_pes.begin(), rank_);
+
             GraphElem nbr_pes_size = nbr_pes.size(), snbr_pes_size = 0;
             MPI_Reduce(&nbr_pes_size, &snbr_pes_size, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
             
@@ -1247,7 +1249,7 @@ class Graph
             rdispls.clear();
         }
         
-	      void weighted_rank_order() const
+	void weighted_rank_order() const
         {
             std::vector<GraphElem> nbr_pes;
             std::vector<GraphElem> ng_pes, index;
@@ -1273,6 +1275,8 @@ class Graph
                 }
             }
              
+            nbr_pes.insert(nbr_pes.begin(), rank_);
+            
             GraphElem nbr_pes_size = nbr_pes.size(), snbr_pes_size = 0;
             MPI_Reduce(&nbr_pes_size, &snbr_pes_size, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
 
@@ -1294,7 +1298,7 @@ class Graph
                 }
             }
 
-	          std::sort(nbr_pes.begin(), nbr_pes.end(), sort_indices(ng_pes.data()));
+	    std::sort(nbr_pes.begin()+1, nbr_pes.end(), sort_indices(ng_pes.data()));
 
             std::vector<GraphElem> pe_list, pe_map, pe_list_nodup, pe_idx;
             std::vector<int> rcounts, rdispls;
