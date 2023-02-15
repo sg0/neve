@@ -150,9 +150,17 @@ int main(int argc, char **argv)
     {
         t0 = MPI_Wtime();
         if (rankOrderType == 1)
-            g->rank_order();
+            g->rank_order(none);
         else if (rankOrderType == 2)
-            g->weighted_rank_order();
+            g->weighted_rank_order(none);
+        else if (rankOrderType == 3)
+            g->rank_order(ascending);
+        else if (rankOrderType == 4)
+            g->rank_order(descending);
+        else if (rankOrderType == 5)
+            g->weighted_rank_order(ascending);
+        else if (rankOrderType == 6)
+            g->weighted_rank_order(descending);
         else
             g->matching_rank_order();
         t1 = MPI_Wtime() - t0;
