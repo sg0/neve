@@ -1377,7 +1377,7 @@ class Graph
             rdispls.clear();
         }
         
-        void matching_rank_order(std::string outputFileName, bool writeOutputFile) const
+        void matching_rank_order() const
         {
             std::vector<GraphElem> nbr_pes, ng_pes;
 	          std::string outfile = "NEVE_MATCHING_MPI_RANK_ORDER." + std::to_string(size_); 
@@ -1495,8 +1495,6 @@ class Graph
                     pos++;
                 }
             }
-            if (rank_ == 0 && writeOutputFile)
-                pg->write_to_file2(outputFileName);
 
             // Invoke matching on weighted process graph, pg
             std::vector<GraphElem> pe_list, pe_map, pe_list_nodup;
@@ -1554,6 +1552,166 @@ class Graph
             pe_list_nodup.clear();
             nbr_pes.clear();
             pe_map.clear();
+            rcounts.clear();
+            displs.clear();
+        }
+        
+        void write_process_graph(std::string outputFileName) const
+        {
+            std::vector<GraphElem> nbr_pes, ng_pes;
+            std::vector<std::array<GraphElem,3>> send_pelist, pe_edgelist;
+           
+            // Build the process graph
+            // -----------------------
+            
+            // get the edge weights
+            
+            // allocate (and fill with 0) an array with one element per process
+            ng_pes.resize(size_, 0);
+            // iterate over each of this process's graph's local vertices
+            // equivalent to iterating over rows of the implicit CSR
+            for (GraphElem i = 0; i < lnv_; i++)
+            {
+                // extract a single row from the CSR: for a given row i, set e0 to be
+                // the index of the first edge that appears on that row, and set e1 to
+                // be the index of the first edge to appear on the following row
+                GraphElem e0, e1;
+                this->edge_range(i, e0, e1);
+
+                // iterate over each edge in the current row i
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    // combining an edge object with the current row (i) yields a
+                    // complete edge (i, edge.tail_)
+                    Edge const& edge = this->get_edge(e);
+                    const int target = this->get_owner(edge.tail_);
+                    
+                    // if the vertex at the other side of the edge (edge.tail_) is not
+                    // owned by the current process,
+                    // then increment the number of communications this process has with
+                    // the vertex's owner
+                    if (target != rank_)
+                        ng_pes[target] += 1; 
+                }                
+            }
+            // end result: ng_pes is populated such that, for every process i, ng_pes[i] is the 
+            // number of edges between vertices owned by this process and vertices owned 
+            // by process i in the application graph
+
+            // same as above...
+            for (GraphElem i = 0; i < lnv_; i++)
+            {
+                GraphElem e0, e1;
+                this->edge_range(i, e0, e1);
+
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    // ... iterating over complete edges (i, edge.tail_)
+                    Edge const& edge = this->get_edge(e);
+                    const int target = this->get_owner(edge.tail_);
+                    // if the vertex at the other side of the edge (edge.tail_) is not
+                    // owned by the current process,
+                    if (target != rank_)
+                    {
+                        // and this foreign vertex hasn't been processed before,
+                        if (std::find(nbr_pes.begin(), nbr_pes.end(), target) 
+                                == nbr_pes.end())
+                        {
+                            // add it to the end of a tracking array (so it won't be processed twice)
+                            nbr_pes.push_back(target);
+                            // and add the triple (this process, the target process, edge weight)
+                            // to the end of an array that will be later sent to a single process
+                            // which will use it to build the complete process graph
+                            send_pelist.emplace_back(std::array<GraphElem,3>({rank_, target, ng_pes[target]}));
+                        }
+                    }
+                }                
+            }
+            // end result: send_pelist contains a list of (this process, other process, weight)
+            // for all (this process, other process) such that weight is the number of edges shared
+            // by the processes in the original application graph and weight is not zero
+
+            ng_pes.clear();
+
+            GraphElem count = send_pelist.size()*3;
+            GraphElem totcount = 0;
+            std::vector<int> rcounts(size_,0), displs(size_,0);
+            MPI_Allreduce(&count, &totcount, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
+            MPI_Allgather(&count, 1, MPI_INT, rcounts.data(), 1, MPI_INT, comm_);
+            GraphElem disp = 0;
+            for (int i = 0; i < size_; i++)
+            {
+                displs[i] = disp;
+                disp += rcounts[i];
+            }
+            pe_edgelist.resize(totcount/3);
+            MPI_Allgatherv(send_pelist.data(), count, MPI_GRAPH_TYPE, pe_edgelist.data(), 
+                    rcounts.data(), displs.data(), MPI_GRAPH_TYPE, comm_);
+
+            const GraphElem pnv = size_;
+            const GraphElem pne = pe_edgelist.size();
+            std::vector<GraphElem> edge_count(pnv + 1, 0);
+
+            for (GraphElem i = 0; i < pne; i++) 
+            { edge_count[pe_edgelist[i][0]+1]++; }
+
+           
+            // create process graph
+            CSR* pg = new CSR(pnv, pne);
+            std::vector<GraphElem> ec_tmp(pnv + 1);
+            
+            std::partial_sum(edge_count.begin(), edge_count.end(), ec_tmp.begin());
+            edge_count = ec_tmp;
+            
+            pg->edge_indices_[0] = 0;
+            for (GraphElem i = 0; i < pnv; i++)
+                pg->edge_indices_[i+1] = edge_count[i+1];
+            edge_count.clear();
+
+            auto ecmp = [](std::array<GraphElem,3> const& e0, std::array<GraphElem,3> const& e1)
+            { return ((e0[0] < e1[0]) || ((e0[0] == e1[0]) && (e0[1] < e1[1]))); };
+
+            if (!std::is_sorted(pe_edgelist.begin(), pe_edgelist.end(), ecmp)) 
+                std::sort(pe_edgelist.begin(), pe_edgelist.end(), ecmp);
+#if 0
+            if (rank_ == 0)
+            {
+                std::cout << "Process graph edgelist: " << std::endl;
+                for (GraphElem k = 0; k < pe_edgelist.size(); k++)
+                    std::cout << pe_edgelist[k][0] << " ---- " << pe_edgelist[k][1] 
+                        << " ---- " << pe_edgelist[k][2] << std::endl;
+            }
+
+            MPI_Barrier(comm_);
+#endif
+            GraphElem pos = 0;
+            for (GraphElem i = 0; i < pnv; i++) 
+            {
+                GraphElem e0, e1;
+                pg->edge_range(i, e0, e1);
+
+                for (GraphElem j = e0; j < e1; j++) 
+                {
+                    Edge &edge = pg->get_edge(j);
+
+                    assert(pos == j);
+                    assert(i == pe_edgelist[pos][0]);
+
+                    edge.tail_ = pe_edgelist[pos][1];
+                    edge.weight_ = (GraphWeight)(pe_edgelist[pos][2]);
+
+                    pos++;
+                }
+            }
+            if (rank_ == 0)
+                pg->write_to_file2(outputFileName);
+
+            MPI_Barrier(comm_);
+
+            pe_edgelist.clear();
+            send_pelist.clear();
+            edge_count.clear();
+            nbr_pes.clear();
             rcounts.clear();
             displs.clear();
         }
@@ -1689,6 +1847,9 @@ printf("debug m: %d, n: %d\n", M_, N_);
             for(GraphElem i=1;  i < M_local_+1; i++)
                 g->edge_indices_[i] -= g->edge_indices_[0];   
             g->edge_indices_[0] = 0;
+            
+            printf("g's edge indices are as follows\n");
+            g->print(false);
 
             return g;
         }

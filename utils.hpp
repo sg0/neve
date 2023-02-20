@@ -214,7 +214,10 @@ class CSR
         CSR(GraphElem nv, GraphElem ne): 
             nv_(nv), ne_(ne) 
         {
+            // ROW_INDEX
             edge_indices_ = new GraphElem[nv_+1];
+            
+            // V (edge weight) and COL_INDEX (edge tail)
             edge_list_    = new Edge[ne_];
         }
 
@@ -265,7 +268,15 @@ class CSR
                 
                 for (GraphElem j = e0; j < e1; j ++) {
                     const Edge &edge = get_edge(j);
-                    ofs.write(reinterpret_cast<const char *>(&edge), sizeof(Edge));
+                    GraphElem tail = (&edge)->tail_;
+                    GraphWeight weight = (&edge)->weight_;
+                    weight = 1;
+                    
+                    // temporary - don't write actual edge
+                    // ofs.write(reinterpret_cast<const char *>(&edge), sizeof(Edge));
+                    
+                    ofs.write(reinterpret_cast<const char *>(&tail), sizeof(GraphElem));
+                    ofs.write(reinterpret_cast<const char *>(&weight), sizeof(GraphWeight));
                 }
             }
             
