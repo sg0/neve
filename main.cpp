@@ -198,7 +198,12 @@ int main(int argc, char **argv)
         if (minSizeExchange == 0)
             minSizeExchange = MIN_SIZE;
 
-        Comm c(g, minSizeExchange, maxSizeExchange, graphShrinkPercent);
+        Comm *c = nullptr;
+
+        if (performBWTest)
+            c = new Comm(g, minSizeExchange, maxSizeExchange, graphShrinkPercent);
+        else
+            c = new Comm(g, minSizeExchange, maxSizeExchange);
 
         MPI_Barrier(MPI_COMM_WORLD);
 
@@ -215,16 +220,16 @@ int main(int argc, char **argv)
                         << " for bandwidth test." << std::endl;
                 }
                 if (maxNumGhosts > 0)
-                    c.p2p_bw_snbr(processNbr, maxNumGhosts);
+                    c->p2p_bw_snbr(processNbr, maxNumGhosts);
                 else
-                    c.p2p_bw_snbr(processNbr);
+                    c->p2p_bw_snbr(processNbr);
             }
             else
             {
                 if (hardSkip)
-                    c.p2p_bw_hardskip();
+                    c->p2p_bw_hardskip();
                 else
-                    c.p2p_bw();
+                    c->p2p_bw();
             }
         }
 
@@ -240,26 +245,26 @@ int main(int argc, char **argv)
                         std::cout << "Choosing the neighborhood of process #" << processNbr 
                             << " for latency test." << std::endl;
                     }
-                    c.p2p_lt_snbr(processNbr);
+                    c->p2p_lt_snbr(processNbr);
                 }
                 else {
                     if (fallAsleep) {
                         if (me == 0)
                             std::cout << "Invoking (u)sleep for an epoch equal to #locally-owned-vertices" << std::endl;
-                        c.p2p_lt_usleep();
+                        c->p2p_lt_usleep();
                     }
                     else if (performWorkSum) {
                         if (me == 0)
                             std::cout << "Invoking work performing degree sum for #locally-owned-vertices" << std::endl;
-                        c.p2p_lt_worksum();
+                        c->p2p_lt_worksum();
                     }
                     else if (performWorkMax) {
                         if (me == 0)
                             std::cout << "Invoking work performing degree max for #locally-owned-vertices" << std::endl;
-                        c.p2p_lt_workmax();
+                        c->p2p_lt_workmax();
                     }
                     else
-                        c.p2p_lt();
+                        c->p2p_lt();
                 }
             }
 
@@ -272,12 +277,12 @@ int main(int argc, char **argv)
                         std::cout << "Choosing the neighborhood of process #" << processNbr 
                             << " for latency test (using MPI_Isend/Irecv)." << std::endl;
                     }
-                    c.p2p_lt_snbr(processNbr);
+                    c->p2p_lt_snbr(processNbr);
                 }
                 else
                 {
 #ifndef SSTMAC
-                    c.nbr_ala_lt();
+                    c->nbr_ala_lt();
 #else
 #warning "SSTMAC is defined: MPI3 neighborhood collectives are turned OFF."
 #endif
@@ -293,12 +298,12 @@ int main(int argc, char **argv)
                         std::cout << "Choosing the neighborhood of process #" << processNbr 
                             << " for latency test (using MPI_Isend/Irecv)." << std::endl;
                     }
-                    c.p2p_lt_snbr(processNbr);
+                    c->p2p_lt_snbr(processNbr);
                 }
                 else
                 {
 #ifndef SSTMAC
-                    c.nbr_aga_lt();
+                    c->nbr_aga_lt();
 #else
 #warning "SSTMAC is defined: MPI3 neighborhood collectives are turned OFF."
 #endif
@@ -321,8 +326,10 @@ int main(int argc, char **argv)
 #endif
         }
 
-        c.destroy_nbr_comm();
+        c->destroy_nbr_comm();
+        delete c;
     } // end latency/bandwidth tests
+
 
     MPI_Barrier(MPI_COMM_WORLD);
    
