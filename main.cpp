@@ -168,9 +168,17 @@ int main(int argc, char **argv)
     {
         t0 = MPI_Wtime();
         if (rankOrderType == 1)
-            g->rank_order();
+            g->rank_order(none);
         else if (rankOrderType == 2)
-            g->weighted_rank_order();
+            g->weighted_rank_order(none);
+        else if (rankOrderType == 3)
+            g->rank_order(ascending);
+        else if (rankOrderType == 4)
+            g->rank_order(descending);
+        else if (rankOrderType == 5)
+            g->weighted_rank_order(ascending);
+        else if (rankOrderType == 6)
+            g->weighted_rank_order(descending);
         else
             g->matching_rank_order();
         t1 = MPI_Wtime() - t0;
@@ -212,7 +220,12 @@ int main(int argc, char **argv)
         if (minSizeExchange == 0)
             minSizeExchange = MIN_SIZE;
 
-        Comm c(g, minSizeExchange, maxSizeExchange, graphShrinkPercent);
+        Comm *c = nullptr;
+
+        if (performBWTest)
+            c = new Comm(g, minSizeExchange, maxSizeExchange, graphShrinkPercent);
+        else
+            c = new Comm(g, minSizeExchange, maxSizeExchange);
 
         MPI_Barrier(MPI_COMM_WORLD);
 
@@ -232,23 +245,23 @@ int main(int argc, char **argv)
                         << " for bandwidth test." << std::endl;
                 }
                 if (maxNumGhosts > 0)
-                    c.p2p_bw_snbr(processNbr, maxNumGhosts);
+                    c->p2p_bw_snbr(processNbr, maxNumGhosts);
                 else
-                    c.p2p_bw_snbr(processNbr);
+                    c->p2p_bw_snbr(processNbr);
             }
             else
             {
                 if (hardSkip)
-                    c.p2p_bw_hardskip(0);
+                    c->p2p_bw_hardskip(0);
                 else
-                    c.p2p_bw(0);
+                    c->p2p_bw(0);
             }
         } else if (performBWTestRMA) 
         {
             if (hardSkip)
-                c.p2p_bw_hardskip(1);
+                c->p2p_bw_hardskip(1);
             else
-                c.p2p_bw(1);
+                c->p2p_bw(1);
         }
         
         // done with bandwidth tests
@@ -268,7 +281,7 @@ int main(int argc, char **argv)
                 std::cout << "Choosing the neighborhood of process #" << processNbr 
                     << " for latency test." << std::endl;
             }
-            c.p2p_lt_snbr(processNbr);
+            c->p2p_lt_snbr(processNbr);
         }
         
         if (lttOption == 1 || lttOption == 2) {
@@ -283,43 +296,43 @@ int main(int argc, char **argv)
             if (fallAsleep) {
                 if (me == 0)
                     std::cout << "Invoking (u)sleep for an epoch equal to #locally-owned-vertices" << std::endl;
-                c.p2p_lt_usleep();
+                c->p2p_lt_usleep();
             }
             else if (performWorkSum) {
                 if (me == 0)
                     std::cout << "Invoking work performing degree sum for #locally-owned-vertices" << std::endl;
-                c.p2p_lt_worksum();
+                c->p2p_lt_worksum();
             }
             else if (performWorkMax) {
                 if (me == 0)
                     std::cout << "Invoking work performing degree max for #locally-owned-vertices" << std::endl;
-                c.p2p_lt_workmax();
+                c->p2p_lt_workmax();
             }
             else
                 // run p2p_lt using nonblocking send/recv kernel
-                c.p2p_lt(0);
+                c->p2p_lt(0);
             break;
             
         case 1: // MPI_Neighbor_alltoall
-            c.nbr_ala_lt();
+            c->nbr_ala_lt();
             break;
         case 2: // MPI_Neighbor_allgather
-            c.nbr_aga_lt();
+            c->nbr_aga_lt();
             break;
         case 3: // MPI RMA with MPI_Rput using flush
-            c.p2p_lt(3);
+            c->p2p_lt(3);
             break;
         case 4: // MPI RMA with MPI_Rput using fence
-            c.p2p_lt(4);
+            c->p2p_lt(4);
             break;
         case 5: // MPI with nonblocking consensus
-            c.p2p_lt(7);
+            c->p2p_lt(7);
             break;
         case 6: // SHMEM with barrier
-            c.p2p_lt(9);
+            c->p2p_lt(9);
             break;
         case 7: // SHMEM with put_signal
-            c.p2p_lt(8);
+            c->p2p_lt(8);
             break;
         default:
             break;
@@ -343,8 +356,10 @@ int main(int argc, char **argv)
 #endif
         }
 
-        c.destroy_nbr_comm();
+        c->destroy_nbr_comm();
+        delete c;
     } // end latency/bandwidth tests
+
 
     MPI_Barrier(MPI_COMM_WORLD);
    

@@ -1143,7 +1143,7 @@ class Graph
         }
 
         // Rank order
-        void rank_order() const
+        void rank_order(DegreeOrder order=none) const
         {
             std::vector<GraphElem> nbr_pes;
 	          std::string outfile = "NEVE_MPI_RANK_ORDER." + std::to_string(size_); 
@@ -1166,6 +1166,8 @@ class Graph
                     }
                 }
             }
+
+            nbr_pes.insert(nbr_pes.begin(), rank_);
 
             GraphElem nbr_pes_size = nbr_pes.size(), snbr_pes_size = 0;
             MPI_Reduce(&nbr_pes_size, &snbr_pes_size, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
@@ -1203,12 +1205,39 @@ class Graph
 
             if (rank_ == 0)
             {
-                for (GraphElem x = 0; x < pe_list.size(); x++)
+                if (order == none)
                 {
-                    if (pe_map[pe_list[x]] == 0)
+                    for (GraphElem x = 0; x < pe_list.size(); x++)
                     {
-                        pe_map[pe_list[x]] = 1;
-                        pe_list_nodup.push_back(pe_list[x]);
+                        if (pe_map[pe_list[x]] == 0)
+                        {
+                            pe_map[pe_list[x]] = 1;
+                            pe_list_nodup.push_back(pe_list[x]);
+                        }
+                    }
+                }
+                else
+                {
+                    std::vector<int> idx(rcounts.size());
+                    std::iota(idx.begin(), idx.end(), 0);
+
+                    if (order == ascending)
+                        std::stable_sort(idx.begin(), idx.end(), sort_indices<int>(rcounts.data()));
+                    else if (order == descending)
+                    {
+                        std::stable_sort(idx.begin(), idx.end(),
+                                [&rcounts](int i1, int i2) {return rcounts[i1] > rcounts[i2];});
+                    }
+                    else
+                        std::stable_sort(idx.begin(), idx.end(), sort_indices<int>(rcounts.data()));
+
+                    for (auto x : idx)
+                    {
+                        if (pe_map[pe_list[x]] == 0)
+                        {
+                            pe_map[pe_list[x]] = 1;
+                            pe_list_nodup.push_back(pe_list[x]);
+                        }
                     }
                 }
 
@@ -1247,7 +1276,7 @@ class Graph
             rdispls.clear();
         }
         
-	      void weighted_rank_order() const
+	void weighted_rank_order(DegreeOrder order=none) const
         {
             std::vector<GraphElem> nbr_pes;
             std::vector<GraphElem> ng_pes, index;
@@ -1273,6 +1302,8 @@ class Graph
                 }
             }
              
+            nbr_pes.insert(nbr_pes.begin(), rank_);
+            
             GraphElem nbr_pes_size = nbr_pes.size(), snbr_pes_size = 0;
             MPI_Reduce(&nbr_pes_size, &snbr_pes_size, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
 
@@ -1294,7 +1325,7 @@ class Graph
                 }
             }
 
-	          std::sort(nbr_pes.begin(), nbr_pes.end(), sort_indices(ng_pes.data()));
+	    std::sort(nbr_pes.begin()+1, nbr_pes.end(), sort_indices<GraphElem>(ng_pes.data()));
 
             std::vector<GraphElem> pe_list, pe_map, pe_list_nodup, pe_idx;
             std::vector<int> rcounts, rdispls;
@@ -1327,14 +1358,41 @@ class Graph
                     pe_list.data(), rcounts.data(), rdispls.data(), 
                     MPI_GRAPH_TYPE, 0, comm_);
             
-	          if (rank_ == 0)
+	    if (rank_ == 0)
             {
-                for (GraphElem x = 0; x < pe_list.size(); x++)
+                if (order == none)
                 {
-                    if (pe_map[pe_list[x]] == 0)
+                    for (GraphElem x = 0; x < pe_list.size(); x++)
                     {
-                        pe_map[pe_list[x]] = 1;
-                        pe_list_nodup.push_back(pe_list[x]);
+                        if (pe_map[pe_list[x]] == 0)
+                        {
+                            pe_map[pe_list[x]] = 1;
+                            pe_list_nodup.push_back(pe_list[x]);
+                        }
+                    }
+                }
+                else
+                {
+                    std::vector<int> idx(rcounts.size());
+                    std::iota(idx.begin(), idx.end(), 0);
+
+                    if (order == ascending)
+                        std::stable_sort(idx.begin(), idx.end(), sort_indices<int>(rcounts.data()));
+                    else if (order == descending)
+                    {
+                        std::stable_sort(idx.begin(), idx.end(),
+                                [&rcounts](int i1, int i2) {return rcounts[i1] > rcounts[i2];});
+                    }
+                    else
+                        std::stable_sort(idx.begin(), idx.end(), sort_indices<int>(rcounts.data()));
+
+                    for (auto x : idx)
+                    {
+                        if (pe_map[pe_list[x]] == 0)
+                        {
+                            pe_map[pe_list[x]] = 1;
+                            pe_list_nodup.push_back(pe_list[x]);
+                        }
                     }
                 }
                 

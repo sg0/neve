@@ -76,6 +76,121 @@ class Comm
     public:
 
 #define COMM_COMMON(mpi_version) COMM_COMMON_##mpi_version
+#define COMM_COMMON_LT(mpi_version) COMM_COMMON_LT_##mpi_version
+
+#define COMM_COMMON_LT_MPI3 \
+        do { \
+            comm_ = g_->get_comm(); \
+            MPI_Comm_size(comm_, &size_); \
+            MPI_Comm_rank(comm_, &rank_); \
+            const GraphElem lne = g_->get_lne(); \
+            lnv_ = g_->get_lnv(); \
+            std::vector<GraphElem> a2a_send_dat(size_), a2a_recv_dat(size_); \
+            /* track outgoing ghosts not owned by me */ \
+            for (GraphElem i = 0; i < lnv_; i++) \
+            { \
+                GraphElem e0, e1; \
+                g_->edge_range(i, e0, e1); \
+                for (GraphElem e = e0; e < e1; e++) \
+                { \
+                    Edge const& edge = g_->get_edge(e); \
+                    const int owner = g_->get_owner(edge.tail_); \
+                    if (owner != rank_) \
+                    { \
+                        if (std::find(targets_.begin(), targets_.end(), owner) == targets_.end()) \
+                        { \
+                            targets_.push_back(owner); \
+                            outdegree_++; \
+                        } \
+                        out_nghosts_++; \
+                        a2a_send_dat[owner]++; \
+                    } \
+                } \
+            } \
+            assert(outdegree_ == targets_.size()); \
+            /* track incoming communication (processes for which I am a ghost) */ \
+            /* send to PEs in targets_ list about shared ghost info */ \
+            MPI_Alltoall(a2a_send_dat.data(), 1, MPI_GRAPH_TYPE, a2a_recv_dat.data(), 1, MPI_GRAPH_TYPE, comm_); \
+            MPI_Barrier(comm_); \
+            for (int p = 0; p < size_; p++) \
+            { \
+                if (a2a_recv_dat[p] > 0) \
+                { \
+                    sources_.push_back(p); \
+                    indegree_++; \
+                    in_nghosts_ += a2a_recv_dat[p]; \
+                } \
+            } \
+            assert(indegree_ == sources_.size()); \
+            sbuf_ = new char[outdegree_*max_size_]; \
+            rbuf_ = new char[indegree_*max_size_]; \
+            sreq_ = new MPI_Request[outdegree_]; \
+            rreq_ = new MPI_Request[indegree_]; \
+	    a2a_send_dat.clear(); \
+            a2a_recv_dat.clear(); \
+            /* create graph topology communicator for neighbor collectives */ \
+            MPI_Dist_graph_create_adjacent(comm_, sources_.size(), sources_.data(), \
+                    MPI_UNWEIGHTED, targets_.size(), targets_.data(), MPI_UNWEIGHTED, \
+                    MPI_INFO_NULL, 0 , &nbr_comm_); \
+            /* following is not necessary, just checking */ \
+            int weighted, indeg, outdeg; \
+            MPI_Dist_graph_neighbors_count(nbr_comm_, &indeg, &outdeg, &weighted); \
+            assert(indegree_ == indeg); \
+            assert(outdegree_ == outdeg); \
+        } while(0)
+
+#define COMM_COMMON_LT_MPI2 \
+        do { \
+            comm_ = g_->get_comm(); \
+            MPI_Comm_size(comm_, &size_); \
+            MPI_Comm_rank(comm_, &rank_); \
+            const GraphElem lne = g_->get_lne(); \
+            lnv_ = g_->get_lnv(); \
+            std::vector<GraphElem> a2a_send_dat(size_), a2a_recv_dat(size_); \
+            /* track outgoing ghosts not owned by me */ \
+            for (GraphElem i = 0; i < lnv_; i++) \
+            { \
+                GraphElem e0, e1; \
+                g_->edge_range(i, e0, e1); \
+                for (GraphElem e = e0; e < e1; e++) \
+                { \
+                    Edge const& edge = g_->get_edge(e); \
+                    const int owner = g_->get_owner(edge.tail_); \
+                    if (owner != rank_) \
+                    { \
+                        if (std::find(targets_.begin(), targets_.end(), owner) == targets_.end()) \
+                        { \
+                            targets_.push_back(owner); \
+                            outdegree_++; \
+                        } \
+                        out_nghosts_++; \
+                        a2a_send_dat[owner]++; \
+                    } \
+                } \
+            } \
+            assert(outdegree_ == targets_.size()); \
+            /* track incoming communication (processes for which I am a ghost) */ \
+            /* send to PEs in targets_ list about shared ghost info */ \
+            MPI_Alltoall(a2a_send_dat.data(), 1, MPI_GRAPH_TYPE, a2a_recv_dat.data(), 1, MPI_GRAPH_TYPE, comm_); \
+            MPI_Barrier(comm_); \
+            for (int p = 0; p < size_; p++) \
+            { \
+                if (a2a_recv_dat[p] > 0) \
+                { \
+                    sources_.push_back(p); \
+                    indegree_++; \
+                    in_nghosts_ += a2a_recv_dat[p]; \
+                } \
+            } \
+            assert(indegree_ == sources_.size()); \
+            sbuf_ = new char[outdegree_*max_size_]; \
+            rbuf_ = new char[indegree_*max_size_]; \
+            sreq_ = new MPI_Request[outdegree_]; \
+            rreq_ = new MPI_Request[indegree_]; \
+	    a2a_send_dat.clear(); \
+            a2a_recv_dat.clear(); \
+        } while(0)
+
 
 #define COMM_COMMON_MPI3 \
         do { \
@@ -175,8 +290,8 @@ class Comm
             /* following is not necessary, just checking */ \
             int weighted, indeg, outdeg; \
             MPI_Dist_graph_neighbors_count(nbr_comm_, &indeg, &outdeg, &weighted); \
-            assert(indegree_ == sources_.size()); \
-            assert(outdegree_ == targets_.size()); \
+            assert(indegree_ == indeg); \
+            assert(outdegree_ == outdeg); \
         } while(0)
 
 #define COMM_COMMON_MPI2 \
@@ -328,7 +443,38 @@ class Comm
             COMM_COMMON(MPI3);
             #endif
         }       
-        
+         
+        explicit Comm(Graph* g, GraphElem min_size, GraphElem max_size):
+            g_(g), comm_(MPI_COMM_NULL), nbr_comm_(MPI_COMM_NULL), 
+            in_nghosts_(0), out_nghosts_(0), lnv_(0),
+            target_pindex_(0), source_pindex_(0),
+            nghosts_in_target_(0), nghosts_in_source_(0),
+            sbuf_(nullptr), rbuf_(nullptr),
+            sreq_(nullptr), rreq_(nullptr),
+            min_size_(min_size), max_size_(max_size), 
+            large_msg_size_(LARGE_SIZE), 
+            bw_loop_count_(0), 
+            bw_loop_count_large_(0),
+            bw_skip_count_(0), 
+            bw_skip_count_large_(0),
+            lt_loop_count_(LT_LOOP_COUNT), 
+            lt_loop_count_large_(LT_LOOP_COUNT_LARGE),
+            lt_skip_count_(LT_SKIP_COUNT), 
+            lt_skip_count_large_(LT_SKIP_COUNT_LARGE),
+            targets_(0), sources_(0), indegree_(0), outdegree_(0),
+            shrinkp_(0.0)
+        { 
+            #ifdef SSTMAC
+            COMM_COMMON_LT(MPI2); 
+            posix_memalign((void**)&sbuf_, sysconf(_SC_PAGESIZE), outdegree_*max_size_);
+            posix_memalign((void**)&rbuf_, sysconf(_SC_PAGESIZE), indegree_*max_size_);
+            std::memset(sbuf_, 0, outdegree_*max_size_);
+            std::memset(rbuf_, 0, indegree_*max_size_);
+            #else
+            COMM_COMMON_LT(MPI3);
+            #endif
+        }
+
         explicit Comm(Graph* g, 
                 GraphElem max_size, GraphElem min_size,
                 GraphElem large_msg_size,
@@ -391,6 +537,13 @@ class Comm
         { 
             std::memset(sbuf_, 'a', out_nghosts_*size); 
             std::memset(rbuf_, 'b', in_nghosts_*size);
+            std::memset(g_->degree_, 0, lnv_*sizeof(GraphWeight));
+        }
+        
+        void touch_buffers_lt(GraphElem const& size)
+        { 
+            std::memset(sbuf_, 'a', outdegree_*size); 
+            std::memset(rbuf_, 'b', indegree_*size);
             std::memset(g_->degree_, 0, lnv_*sizeof(GraphWeight));
         }
 
@@ -1091,6 +1244,7 @@ class Comm
                 ltt_kernel = &Comm::comm_kernel_lt_shmem_barrier;
                 break;
             }
+            
     #endif
             
             if(rank_ == 0) {
@@ -1107,7 +1261,8 @@ class Comm
             }
         
             for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1)) {
-                touch_buffers(size);
+                touch_buffers_lt(size);
+
                 MPI_Barrier(comm_);
         
                 if (size > large_msg_size_) {
@@ -1201,7 +1356,7 @@ class Comm
 
 	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
             {       
-                touch_buffers(size);
+                touch_buffers_lt(size);
                 MPI_Barrier(comm_);
 
                 if (size > large_msg_size_) 
@@ -1303,7 +1458,7 @@ class Comm
 
 	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
             {       
-                touch_buffers(size);
+                touch_buffers_lt(size);
                 MPI_Barrier(comm_);
 
                 if (size > large_msg_size_) 
@@ -1401,7 +1556,7 @@ class Comm
 
 	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
             {       
-                touch_buffers(size);
+                touch_buffers_lt(size);
                 MPI_Barrier(comm_);
 
                 if (size > large_msg_size_) 
@@ -1500,7 +1655,7 @@ class Comm
 
 	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
             {       
-                touch_buffers(size);
+                touch_buffers_lt(size);
                 MPI_Barrier(comm_);
 
                 if (size > large_msg_size_) 
@@ -1581,7 +1736,7 @@ class Comm
 
 	    for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
             {       
-                touch_buffers(size);
+                touch_buffers_lt(size);
                 MPI_Barrier(comm_);
 
                 if (size > large_msg_size_) 
@@ -1840,7 +1995,7 @@ class Comm
 
                 for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1))
                 {       
-                    touch_buffers(size);
+                    touch_buffers_lt(size);
                     MPI_Barrier(nbr_comm);
                     
                     if(size > large_msg_size_) 

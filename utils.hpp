@@ -164,6 +164,8 @@ struct EdgeTuple
     {}
 };
 
+enum DegreeOrder { none, ascending, descending };
+
 // Is nprocs a power-of-2?
 int is_pwr2(int pes) 
 { return ((pes != 0) && !(pes & (pes - 1))); }
@@ -195,16 +197,17 @@ T genRandom(T lo, T hi)
 }
 
 // https://stackoverflow.com/questions/3909272/sorting-two-corresponding-arrays
+template <typename T>
 class sort_indices
 {
    public:
-     sort_indices(GraphElem* ptr) : ptr_(ptr) {}
+     sort_indices(T* ptr) : ptr_(ptr) {}
      
-     bool operator()(GraphElem i, GraphElem j) const 
+     bool operator()(T i, T j) const 
      { return ptr_[i] < ptr_[j]; }
    
    private:
-     GraphElem* ptr_;
+     T* ptr_;
 };
 
 // CSR for shared-memory/serial implementations
