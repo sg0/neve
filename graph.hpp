@@ -1840,7 +1840,7 @@ class BinaryEdgeList
             MPI_File_read_all(fh, &M_, sizeof(GraphElem), MPI_BYTE, &status);
             MPI_File_read_all(fh, &N_, sizeof(GraphElem), MPI_BYTE, &status);
             M_local_ = ((M_*(me + 1)) / nprocs) - ((M_*me) / nprocs); 
-printf("debug m: %d, n: %d\n", M_, N_);
+
             // create local graph
             Graph *g = new Graph(M_local_, 0, M_, N_);
 
@@ -1906,9 +1906,6 @@ printf("debug m: %d, n: %d\n", M_, N_);
                 g->edge_indices_[i] -= g->edge_indices_[0];   
             g->edge_indices_[0] = 0;
             
-            printf("g's edge indices are as follows\n");
-            g->print(false);
-
             return g;
         }
 
