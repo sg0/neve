@@ -462,7 +462,6 @@ void parseCommandLine(int argc, char** const argv)
       break;
     }
   }
-std::cout << "LTTOPTIOBN" << lttOption << std::endl;
   // warnings/info
   if (me == 0 && lttOption != -1 && maxNumGhosts) 
   {
