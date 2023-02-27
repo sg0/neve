@@ -126,6 +126,10 @@ class Comm
             rbuf_ = new char[indegree_*max_size_]; \
             sreq_ = new MPI_Request[outdegree_]; \
             rreq_ = new MPI_Request[indegree_]; \
+            MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
+              comm_, &rbuf2_, &window); \
+            shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
+            signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_); \
 	    a2a_send_dat.clear(); \
             a2a_recv_dat.clear(); \
             /* create graph topology communicator for neighbor collectives */ \
