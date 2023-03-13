@@ -1,7 +1,7 @@
 #CXX = armclang++
 CXX = g++
 #CXX = FCC
-MPICXX = mpicxx
+MPICXX = shmemcxx
 
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms
 OPTFLAGS = -O3 -DPRINT_DIST_STATS -DPRINT_EXTRA_NEDGES
@@ -48,6 +48,11 @@ ifeq ($(ENABLE_LLNL_CALIPER), 1)
 CALI_PATH = $(HOME)/builds/caliper
 CXXFLAGS += -DLLNL_CALIPER_ENABLE -I$(CALI_PATH)/include
 LDFLAGS = -Wl,-rpath,$(CALI_PATH)/lib -L$(CALI_PATH)/lib -lcaliper
+endif
+
+# Cray's SHMEM headers are slightly different from OpenSHMEM's
+ifdef CRAY_SHMEM_VERSION
+CXXFLAGS += -DCRAY_SHMEM
 endif
 
 OBJ_MPI = main.o
