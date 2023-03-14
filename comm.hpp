@@ -2113,7 +2113,7 @@ class BFS
             if (g_->get_owner(root) == rank_) 
             {
                 set_visited(root);
-                pred_[g_->global_to_local(root)] = root;
+                pred_[g_->global_to_local(root)] = g_->global_to_local(root);
                 oldq_[oldq_count_++] = root;
             }
 
@@ -2162,7 +2162,7 @@ class BFS
                                 if (!test_visited(edge.tail_)) 
                                 {
                                     set_visited(edge.tail_);
-                                    pred_[g_->global_to_local(edge.tail_)] = src;
+                                    pred_[g_->global_to_local(edge.tail_)] = g_->global_to_local(src);
                                     newq_[newq_count_++] = g_->global_to_local(edge.tail_);
                                     edge_visit_count++;
                                 }
