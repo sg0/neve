@@ -76,6 +76,7 @@ static bool performWorkSum = false;
 static bool performLTTestNbrAlltoAll = false;
 static bool performLTTestNbrAllGather = false;
 static bool createRankOrder = false;
+static bool performBFS = false;
 static int rankOrderType = 0;
 
 static bool chooseSingleNbr = false;
@@ -186,6 +187,13 @@ int main(int argc, char **argv)
         else
             std::cout << "Time to generate distributed graph of " 
                 << nvRGG << " vertices (in s): " << tdt << std::endl;
+    }
+
+
+    if (performBFS)
+    {
+        BFS b(g);
+        b.run_test();
     }
     
     if (performBWTest || performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather)
@@ -343,7 +351,7 @@ void parseCommandLine(int argc, char** const argv)
   int ret;
   optind = 1;
 
-  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:ud:o:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:ud:o:a")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -412,6 +420,9 @@ void parseCommandLine(int argc, char** const argv)
     case 'o':
       rankOrderType = atoi(optarg);
       createRankOrder = true;
+      break;
+    case 'a':
+      performBFS = true;
       break;
     default:
       assert(0 && "Should not reach here!!");
