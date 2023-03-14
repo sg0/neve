@@ -2049,7 +2049,7 @@ class BFS
                             if (!test_visited(tgt)) 
                             {
                                 set_visited(tgt);
-                                pred_[tgt] = src;
+                                pred_[g_->global_to_local(tgt)] = src;
                                 newq_[newq_count_++] = tgt;
                             }
                         }
@@ -2113,7 +2113,7 @@ class BFS
             if (g_->get_owner(root) == rank_) 
             {
                 set_visited(root);
-                pred_[g_->global_to_local(root)] = g_->global_to_local(root);
+                pred_[g_->global_to_local(root)] = root;
                 oldq_[oldq_count_++] = root;
             }
 
@@ -2141,7 +2141,7 @@ class BFS
                         process_msgs();
 
                         assert (g_->get_owner(oldq_[i]) == rank_);
-                        assert (pred_[g_->global_to_local(oldq_[i])] >= 0 && pred_[g_->global_to_local(oldq_[i])] < g_->get_lnv());
+                        assert (pred_[g_->global_to_local(oldq_[i])] >= 0 && pred_[g_->global_to_local(oldq_[i])] < g_->get_nv());
                         GraphElem src = oldq_[i];
 
                         /* Iterate through its incident edges. */
@@ -2162,8 +2162,8 @@ class BFS
                                 if (!test_visited(edge.tail_)) 
                                 {
                                     set_visited(edge.tail_);
-                                    pred_[g_->global_to_local(edge.tail_)] = g_->global_to_local(src);
-                                    newq_[newq_count_++] = g_->global_to_local(edge.tail_);
+                                    pred_[g_->global_to_local(edge.tail_)] = src;
+                                    newq_[newq_count_++] = edge.tail_;
                                     edge_visit_count++;
                                 }
                             }
