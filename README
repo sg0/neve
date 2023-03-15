@@ -179,6 +179,7 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
                       processes - regular (1), weighted (2), regular & ascending order of degrees (3), 
                       regular & descending order of degrees (4), weighted & ascending order of degrees (5), 
                       weighted & descending order of degrees (6) and graph matching (>6). 
+16. -a              : Perform top-down BFS (similar to Graph500 reference implementation).
 
 [*]Note: Unless -w or -t <...> is passed, the code will just load the graph and create the graph data 
 structure. This is deliberate, in case we want to measure the overhead of loading a graph and 

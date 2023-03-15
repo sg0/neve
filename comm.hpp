@@ -1943,7 +1943,7 @@ class BFS
             pdegree_(0), pindex_(0), ract_(0), sact_(nullptr), sctr_(nullptr),
             sbuf_(nullptr), rbuf_(nullptr), sreq_(nullptr), rreq_(MPI_REQUEST_NULL), 
             oldq_(nullptr), newq_(nullptr), nranks_done_(0), newq_count_(0), 
-            oldq_count_(0), seed_(DEF_BFS_SEED)
+            oldq_count_(0), seed_(DEF_BFS_SEED), edge_visit_count_(0)
         {
             const GraphElem lnv = g_->get_lnv();
             comm_ = g_->get_comm();
@@ -2051,6 +2051,7 @@ class BFS
                                 set_visited(tgt);
                                 pred_[g_->global_to_local(tgt)] = src;
                                 newq_[newq_count_++] = tgt;
+                                edge_visit_count_++;
                             }
                         }
                     }
@@ -2107,10 +2108,8 @@ class BFS
         }
 
         // reimplementation of graph500 BFS
-        GraphElem run_bfs(GraphElem root) 
+        void run_bfs(GraphElem root) 
         {
-            GraphElem edge_visit_count = 0;
-
 #if defined(USE_ALLREDUCE_FOR_EXIT)
             GraphElem global_newq_count;
 #else      
@@ -2123,6 +2122,7 @@ class BFS
                 set_visited(root);
                 pred_[g_->global_to_local(root)] = root;
                 oldq_[oldq_count_++] = root;
+                edge_visit_count_++;
             }
 
             process_msgs();
@@ -2172,7 +2172,7 @@ class BFS
                                     set_visited(edge.tail_);
                                     pred_[g_->global_to_local(edge.tail_)] = src;
                                     newq_[newq_count_++] = edge.tail_;
-                                    edge_visit_count++;
+                                    edge_visit_count_++;
                                 }
                             }
                             else
@@ -2252,8 +2252,6 @@ class BFS
                     oldq_count_ = newq_count_;
                     newq_count_ = 0;
                 }
-
-                return edge_visit_count;
         }
 
         void run_test(GraphElem nbfs_roots=DEF_BFS_ROOTS)
@@ -2272,35 +2270,42 @@ class BFS
             bfs_roots.erase(std::unique(bfs_roots.begin(), bfs_roots.end()), bfs_roots.end());
 
             int test_ctr = 0;
-            double g_bfs_time;
-            GraphElem ecg = 0; /* Total edge visitations. */
 
             for (GraphElem const& r : bfs_roots)
             {
-                GraphElem ec_l = 0;
                 if (rank_ == 0) 
                     fprintf(stderr, "Running BFS %d\n", test_ctr);
 
                 /* Clear the pred array. */
                 memset(pred_, 0, g_->get_lnv() * sizeof(GraphElem));
+                double g_bfs_time = 0.0;
 
                 /* Do the actual BFS. */
                 double bfs_start = MPI_Wtime();
-                GraphElem ec = run_bfs(r);
+                run_bfs(r);
                 double bfs_stop = MPI_Wtime();
                 bfs_times[test_ctr] = bfs_stop - bfs_start;
-                
-                MPI_Reduce(&ec, &ec_l, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
-                MPI_Reduce(&bfs_times[test_ctr], &g_bfs_time, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
-                ecg += ec_l;
+                MPI_Allreduce(&bfs_times[test_ctr], &g_bfs_time, 1, MPI_DOUBLE, MPI_SUM, comm_);
 
                 if (rank_ == 0)
                 {
                     double avgt = ((double)(g_bfs_time / (double)size_));
-                    fprintf(stderr, "Average time(s), TEPS for BFS %d, %d: %f, %g\n", test_ctr, r, avgt, (double)((double)ecg / avgt));
+                    bfs_times[test_ctr] = avgt;
+                    fprintf(stderr, "Average time(s), TEPS for BFS %d, %d: %f\n", test_ctr, r, avgt);
                 }
                     
                 test_ctr++;
+            }
+            
+            GraphElem ecg = 0; /* Total edge visitations. */
+            MPI_Reduce(&edge_visit_count_, &ecg, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+                
+            if (rank_ == 0)
+            {
+                double avgt_nroots = std::accumulate(bfs_times.begin(), bfs_times.end(), 0.0) / bfs_roots.size();
+                fprintf(stderr, "-------------------------------------\n");
+                fprintf(stderr, "Average time(s), TEPS across %d roots: %f, %g\n", bfs_roots.size(), avgt_nroots, (double)((double)ecg / avgt_nroots));
+                fprintf(stderr, "-------------------------------------\n");
             }
         }
 
@@ -2312,7 +2317,7 @@ class BFS
         std::unordered_map<int, int> pindex_, mate_; 
         MPI_Comm comm_;
 
-        GraphElem bufsize_, pdegree_, newq_count_, oldq_count_, nranks_done_, ract_, seed_;
+        GraphElem bufsize_, pdegree_, newq_count_, oldq_count_, nranks_done_, ract_, seed_, edge_visit_count_;
         GraphElem *sbuf_, *rbuf_, *pred_, *visited_, *oldq_, *newq_, *sctr_, *sact_;
         MPI_Request *sreq_, rreq_;
 };
