@@ -2039,7 +2039,7 @@ class BFS
                     } 
                     else 
                     {
-                        for (int j = 0; j < count; j += 2) 
+                        for (GraphElem j = 0; j < count; j += 2) 
                         {
                             GraphElem tgt = rbuf_[j];
                             GraphElem src = rbuf_[j + 1];
@@ -2088,6 +2088,15 @@ class BFS
             sact_[pindex_[owner]] = 1;
             sctr_[pindex_[owner]] = 0;
         }
+        
+        void nbsend_count(GraphElem owner)
+        {
+            MPI_Isend(&sbuf_[pindex_[owner] * bufsize_ * 2], sctr_[pindex_[owner]], MPI_GRAPH_TYPE, 
+                    owner, 0, comm_, &sreq_[pindex_[owner]]);
+
+            sact_[pindex_[owner]] = 1;
+            sctr_[pindex_[owner]] = 0;
+        }
 
         void nbsend_zero(GraphElem owner)
         {
@@ -2095,7 +2104,6 @@ class BFS
             MPI_Isend(&sbuf_[0], 0, MPI_GRAPH_TYPE, owner, 0, comm_, &sreq_[pindex_[owner]]);
 
             sact_[pindex_[owner]] = 1;
-            sctr_[pindex_[owner]] = 0;
         }
 
         // reimplementation of graph500 BFS
@@ -2126,7 +2134,7 @@ class BFS
 #endif
                 {
                     memset(sctr_, 0, pdegree_ * sizeof(GraphElem));
-                    nranks_done_ = 1; /* I never send to myself, so I'm always done */
+                    nranks_done_ = 0;
 
                     /* Start the initial receive. */
                     if (nranks_done_ < pdegree_) 
@@ -2192,7 +2200,7 @@ class BFS
                             while (sact_[pindex_[p]]) 
                                 process_msgs();
 
-                            nbsend(p);
+                            nbsend_count(p);
                         }
 
                         /* Wait until all sends to this destination are done. */
@@ -2260,11 +2268,16 @@ class BFS
             for (GraphElem& r : bfs_roots)
                 r = uid(gen);
 
+            std::sort(bfs_roots.begin(), bfs_roots.end());
+            bfs_roots.erase(std::unique(bfs_roots.begin(), bfs_roots.end()), bfs_roots.end());
+
             int test_ctr = 0;
-            GraphElem ecg; /* Total edge visitations. */
+            double g_bfs_time;
+            GraphElem ecg = 0; /* Total edge visitations. */
 
             for (GraphElem const& r : bfs_roots)
             {
+                GraphElem ec_l = 0;
                 if (rank_ == 0) 
                     fprintf(stderr, "Running BFS %d\n", test_ctr);
 
@@ -2276,10 +2289,17 @@ class BFS
                 GraphElem ec = run_bfs(r);
                 double bfs_stop = MPI_Wtime();
                 bfs_times[test_ctr] = bfs_stop - bfs_start;
-                MPI_Allreduce(&ec, &ecg, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
+                
+                MPI_Reduce(&ec, &ec_l, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+                MPI_Reduce(&bfs_times[test_ctr], &g_bfs_time, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
+                ecg += ec_l;
 
-                if (rank_ == 0) 
-                    fprintf(stderr, "Time(s), TEPS for BFS %d: %f, %g\n", test_ctr, bfs_times[test_ctr], (ecg / bfs_times[test_ctr]));
+                if (rank_ == 0)
+                {
+                    double avgt = ((double)(g_bfs_time / (double)size_));
+                    fprintf(stderr, "Average time(s), TEPS for BFS %d, %d: %f, %g\n", test_ctr, r, avgt, (double)((double)ecg / avgt));
+                }
+                    
                 test_ctr++;
             }
         }
