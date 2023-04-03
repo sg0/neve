@@ -948,9 +948,8 @@ class Comm
 //            MPI_Waitall(out_nghosts_, sreq_, MPI_STATUSES_IGNORE);
 //        }
         
-        inline void comm_kernel_bw_rma(GraphElem const& size){
+        inline void comm_kernel_bw_rma_fence(GraphElem const& size){
             GraphElem rng = 0, sng = 0;            // sends
-            printf("hi1q23452345234523453425\n");
             
             MPI_Win_fence(0, window);
             for (int p = 0; p < outdegree_; p++)
@@ -963,6 +962,21 @@ class Comm
             }
             MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
             MPI_Win_fence(0, window);
+        }
+        
+        inline void comm_kernel_bw_rma_flush(GraphElem const& size){
+            GraphElem rng = 0, sng = 0;            // sends
+            
+            for (int p = 0; p < outdegree_; p++)
+            {
+                for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
+                {
+                    MPI_Rput(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_+ sng);
+                    sng++;
+                }
+            }
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+            MPI_Win_flush_all(window);
         }
         
         inline void comm_kernel_bw_shmem_put_signal(GraphElem const& size){
@@ -1114,18 +1128,22 @@ class Comm
                     bw_kernel = &Comm::comm_kernel_bw;
                     break;
                 case 1:
-                    strcpy(second_line, "----Bandwidth test (MPI RMA)----");
-                    bw_kernel = &Comm::comm_kernel_bw_rma;
+                    strcpy(second_line, "--Bandwidth test (Rput - fence)-");
+                    bw_kernel = &Comm::comm_kernel_bw_rma_fence;
                     break;
                 case 2:
+                    strcpy(second_line, "--Bandwidth test (Rput - flush)-");
+                    bw_kernel = &Comm::comm_kernel_bw_rma_flush;
+                    break;
+                case 3:
                     strcpy(second_line, "------Bandwidth test (nbx)------");
                     bw_kernel = &Comm::comm_kernel_bw_nbx;
                     break;
-                case 3:
+                case 4:
                     strcpy(second_line, "-Bandwidth test (SHMEM barrier)-");
                     bw_kernel = &Comm::comm_kernel_bw_shmem_barrier;
                     break;
-                case 4:
+                case 5:
                     strcpy(second_line, "--Bandwidth test (SHMEM signal)-");
                     bw_kernel = &Comm::comm_kernel_bw_shmem_put_signal;
                     break;
@@ -1247,7 +1265,7 @@ class Comm
                         comm_kernel_bw(size);
                         break;
                     case 1:
-                        comm_kernel_bw_rma(size);
+                        comm_kernel_bw_rma_fence(size);
                         break;
                 }
 

@@ -153,9 +153,10 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
 7   -w <protocol>   : Report Bandwidth in MB/s[*]. protocol can be any of
                       0: Nonblocking send/recv (default if protocol unspecified)
                       1: MPI RMA with MPI_Rput using fence
-                      2: MPI with nonblocking consensus
-                      3: SHMEM with barrier
-                      4: SHMEM with put_signal
+                      2: MPI RMA with MPI_Rput using flush
+                      3: MPI with nonblocking consensus
+                      4: SHMEM with barrier
+                      5: SHMEM with put_signal
 8.  -t <protocol>   : Report Latency in microseconds[*]. protocol can be any of
                       0: Nonblocking send/recv
                       1: MPI_Neighbor_alltoall
