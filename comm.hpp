@@ -522,6 +522,12 @@ class Comm
                 MPI_Comm_free(&nbr_comm_); 
         }
         
+        void free_shmem()
+        {
+            shmem_free(shmem_window);
+            shmem_free(signals);
+        }
+        
         ~Comm() 
         {
             targets_.clear();
@@ -912,6 +918,97 @@ class Comm
             MPI_Waitall(in_nghosts_, rreq_, MPI_STATUSES_IGNORE);
             MPI_Waitall(out_nghosts_, sreq_, MPI_STATUSES_IGNORE);
         }
+
+        	// kernel for bandwidth 
+//        inline void comm_kernel_bw_rma(GraphElem const& size)
+//        {
+//            GraphElem rng = 0, sng = 0;
+//
+//            // prepost recvs
+//            for (int p = 0; p < indegree_; p++)
+//            {
+//                for (GraphElem g = 0; g < nghosts_in_source_[p]; g++)
+//                {
+//                    MPI_Irecv(&rbuf_[rng*size], size, MPI_CHAR, sources_[p], g, comm_, rreq_ + rng);
+//                    rng++;
+//                }
+//            }
+//
+//            // sends
+//            for (int p = 0; p < outdegree_; p++)
+//            {
+//                for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
+//                {
+//                    MPI_Isend(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], g, comm_, sreq_+ sng);
+//                    sng++;
+//                }
+//            }
+//
+//            MPI_Waitall(in_nghosts_, rreq_, MPI_STATUSES_IGNORE);
+//            MPI_Waitall(out_nghosts_, sreq_, MPI_STATUSES_IGNORE);
+//        }
+        
+        inline void comm_kernel_bw_rma(GraphElem const& size){
+            GraphElem rng = 0, sng = 0;            // sends
+            printf("hi1q23452345234523453425\n");
+            
+            MPI_Win_fence(0, window);
+            for (int p = 0; p < outdegree_; p++)
+            {
+                for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
+                {
+                    MPI_Rput(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_+ sng);
+                    sng++;
+                }
+            }
+            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
+            MPI_Win_fence(0, window);
+        }
+        
+        inline void comm_kernel_bw_shmem_put_signal(GraphElem const& size){
+            GraphElem rng = 0, sng = 0;            // sends
+            printf("shmem put signal\n");
+            
+            MPI_Win_fence(0, window);
+            for (int p = 0; p < outdegree_; p++)
+            {
+                for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
+                {
+#if defined(CRAY_SHMEM)
+                    shmem_putmem_signal(shmem_window, &sbuf_[sng*size], size, &signals[p], 1, targets_[p]);
+#else
+                    // OpenSHMEM's signal routines require the sig_op parameter to indiate whether
+                    // an update to a signal data object is a set or an add.
+                    // http://www.openshmem.org/site/sites/default/site_files/openshmem-1.5rc2.pdf
+                    shmem_putmem_signal(shmem_window, &sbuf_[sng*size], size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
+#endif
+                    sng++;
+                }
+            }
+            
+            for (int i = 0; i < outdegree_; i ++)
+            {
+                shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
+            }
+        }
+        
+        inline void comm_kernel_bw_shmem_barrier(GraphElem const& size){
+            GraphElem rng = 0, sng = 0;            // sends
+//            printf("shmem barrier\n");
+            
+            shmem_barrier_all();
+            for (int p = 0; p < outdegree_; p++)
+            {
+                for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
+                {
+                    shmem_char_put(shmem_window, &sbuf_[sng*size], size, targets_[p]);
+                    sng++;
+                }
+            }
+            shmem_barrier_all();
+        }
+        
+        
   	
         // kernel for bandwidth using NBX 
         inline void comm_kernel_bw_nbx(GraphElem const& size)
@@ -991,34 +1088,7 @@ class Comm
             MPI_Waitall(avg_ng*(npairs-1), rreq_, MPI_STATUSES_IGNORE);
             MPI_Waitall(avg_ng*(npairs-1), sreq_, MPI_STATUSES_IGNORE);
         }
-
-#if defined(TEST_MPI_RMA)
-        inline void comm_kernel_bw_rma(GraphElem const& size){
-            GraphElem rng = 0, sng = 0;            // sends
-            
-            MPI_Win_fence(0, window);
-            for (int p = 0; p < outdegree_; p++)
-            {
-                for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
-                {
-                    #if defined(BW_RMA_USE_RPUT)
-                    MPI_Rput(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_+ sng);
-                    #elif defined(BW_RMA_USE_RGET)
-                    MPI_Rget(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_+ sng);
-                    #elif defined(BW_RMA_USE_RACCUMULATE)
-                    MPI_Raccumulate(&sbuf_[sng*size], size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, MPI_REPLACE, window, sreq_+ sng);
-                    #endif
-                    sng++;
-                }
-            }
-            MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
-            MPI_Win_fence(0, window);
-        }
 	   
-        inline void comm_kernel_bw_rma(GraphElem const& size, GraphElem const& npairs, 
-            MPI_Comm gcomm, GraphElem const& avg_ng, int const& me){}
-#endif
-
         // Bandwidth tests
         void p2p_bw(int type)
         {
@@ -1034,11 +1104,37 @@ class Comm
             GraphElem sum_ng = out_nghosts_ + in_nghosts_, avg_ng;
             MPI_Allreduce(MPI_IN_PLACE, &sum_ng, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
             avg_ng = sum_ng / sum_npairs;
+            
+            void (Comm::*bw_kernel) (GraphElem const&);
+            char second_line[33];
+            
+            switch (type) {
+                case 0:
+                    strcpy(second_line, "--------Bandwidth test----------");
+                    bw_kernel = &Comm::comm_kernel_bw;
+                    break;
+                case 1:
+                    strcpy(second_line, "----Bandwidth test (MPI RMA)----");
+                    bw_kernel = &Comm::comm_kernel_bw_rma;
+                    break;
+                case 2:
+                    strcpy(second_line, "------Bandwidth test (nbx)------");
+                    bw_kernel = &Comm::comm_kernel_bw_nbx;
+                    break;
+                case 3:
+                    strcpy(second_line, "-Bandwidth test (SHMEM barrier)-");
+                    bw_kernel = &Comm::comm_kernel_bw_shmem_barrier;
+                    break;
+                case 4:
+                    strcpy(second_line, "--Bandwidth test (SHMEM signal)-");
+                    bw_kernel = &Comm::comm_kernel_bw_shmem_put_signal;
+                    break;
+            }
            
             if(rank_ == 0) 
             {
                 std::cout << "--------------------------------" << std::endl;
-                std::cout << "--------Bandwidth test----------" << std::endl;
+                std::cout << second_line << std::endl;
                 std::cout << "--------------------------------" << std::endl;
                 std::cout << std::setw(12) << "# Bytes" << std::setw(13) << "MB/s" 
                     << std::setw(13) << "Msg/s" 
@@ -1047,7 +1143,7 @@ class Comm
                     << std::setw(16) << "95% CI" 
                     << std::endl;
             }
-
+            
             for (GraphElem size = (!min_size_ ? 1 : min_size_); size <= max_size_; size *= 2) 
             {
                 // memset
@@ -1063,22 +1159,15 @@ class Comm
 	        SCOREP_RECORDING_ON();
 #endif
                 // time communication kernel
+//                printf("LOOP is %d and SKIP is %d\n", loop, skip);
                 for (int l = 0; l < loop + skip; l++) 
-                {           
+                {
                     if (l == skip)
                     {
                         MPI_Barrier(comm_);
                         t_start = MPI_Wtime();
                     }
-                    switch (type)
-                    {
-                        case 0:
-                            comm_kernel_bw(size);
-                            break;
-                        case 1:
-                            comm_kernel_bw_rma(size);
-                            break;
-                    }
+                    (this->*bw_kernel)(size);
                 }   
 
 #if defined(SCOREP_USER_ENABLE)

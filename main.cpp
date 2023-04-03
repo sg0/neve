@@ -71,10 +71,8 @@ static bool hardSkip = false;
 static bool randomNumberLCG = false;
 static bool fallAsleep = false;
 
-static int bwOption = 0, performWork = 0;
+static int bwOption = -1, performWork = 0;
 static int lttOption = -1; // default: no latency test
-static bool performBWTest = false;
-static bool performBWTestRMA = false;
 static bool performLTTest = false;
 static bool performWorkMax = false;
 static bool performWorkSum = false;
@@ -210,7 +208,7 @@ int main(int argc, char **argv)
                 << nvRGG << " vertices (in s): " << tdt << std::endl;
     }
     
-    if (performBWTest || performBWTestRMA || lttOption != -1)
+    if (bwOption != -1 || lttOption != -1)
     {
         // Comm object can be instantiated
         // with iteration ranges and other 
@@ -222,21 +220,20 @@ int main(int argc, char **argv)
 
         Comm *c = nullptr;
 
-        if (performBWTest)
+//        if (bwOption == 0)
             c = new Comm(g, minSizeExchange, maxSizeExchange, graphShrinkPercent);
-        else
-            c = new Comm(g, minSizeExchange, maxSizeExchange);
+//        else
+//            c = new Comm(g, minSizeExchange, maxSizeExchange);
 
         MPI_Barrier(MPI_COMM_WORLD);
 
         t0 = MPI_Wtime();
-
+        printf("option is %d\n", bwOption);
         // ---------------------------------------
         // bandwidth tests
         // ---------------------------------------
-        
-        if (performBWTest) 
-        {
+        switch (bwOption) {
+        case 0:
             if (chooseSingleNbr)
             {
                 if (me == 0)
@@ -256,12 +253,10 @@ int main(int argc, char **argv)
                 else
                     c->p2p_bw(0);
             }
-        } else if (performBWTestRMA) 
-        {
-            if (hardSkip)
-                c->p2p_bw_hardskip(1);
-            else
-                c->p2p_bw(1);
+            break;
+        default:
+            c->p2p_bw(bwOption);
+            break;
         }
         
         // done with bandwidth tests
@@ -355,12 +350,12 @@ int main(int argc, char **argv)
             std::cout << "Resolution of MPI_Wtime: " << MPI_Wtick() << std::endl;
 #endif
         }
-
+    
+        c->free_shmem();
         c->destroy_nbr_comm();
         delete c;
     } // end latency/bandwidth tests
-
-
+    
     MPI_Barrier(MPI_COMM_WORLD);
    
     shmem_finalize();
@@ -415,14 +410,6 @@ void parseCommandLine(int argc, char** const argv)
       break;
     case 'w':
       bwOption = atoi(optarg);
-      if (bwOption == 0)
-          // use nonblocking Send/Recv
-          performBWTest = true;
-      else if (bwOption == 1)
-          // use MPI_Neighbor_alltoall
-          performBWTestRMA = true;
-      else
-          performBWTest = true;
       break;
     case 't':
       lttOption = atoi(optarg);
