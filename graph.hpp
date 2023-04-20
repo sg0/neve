@@ -291,9 +291,11 @@ class Graph
 				for(GraphElem j = 0; j < ELEMS_PER_CACHE_LINE; j++) { 
 					if ((i + j) >= nv_)
 						break;
+                                        GraphWeight sum = 0.0;
 					for (GraphElem e = edge_indices[j]; e < edge_indices[j+1]; e++) {
-						vertex_degree[j] += edge_list_[e].weight_;
+						sum += edge_list_[e].weight_;
 					}
+					vertex_degree[j] = sum;
 				}
 			}
 #ifdef LIKWID_MARKER_ENABLE
@@ -339,10 +341,12 @@ class Graph
                 #pragma omp task
 		    {
 #endif
+		GraphWeight sum = 0.0;
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
-                    vertex_degree_[i] += edge_list_[e].weight_;
+                    sum += edge_list_[e].weight_;
                 }
+                    vertex_degree_[i] = sum;
 #ifdef USE_OMP_TASKS_FOR
 		    }
 #endif
