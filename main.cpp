@@ -129,6 +129,7 @@ int main(int argc, char **argv)
                 std::cout << inputFileName << std::endl;
             }
             g = rm.read(me, nprocs, ranksPerNode, inputFileName);
+            assert(g->get_nv() == nprocs);
         } else {
             if (readBalanced == true)
             {
@@ -221,7 +222,11 @@ int main(int argc, char **argv)
         Comm *c = nullptr;
 
 //        if (bwOption == 0)
+        if (graphIsProcessGraph) {
             c = new Comm(g, minSizeExchange, maxSizeExchange, graphShrinkPercent);
+        } else {
+            c = new Comm(g, minSizeExchange, maxSizeExchange, graphShrinkPercent);
+        }
 //        else
 //            c = new Comm(g, minSizeExchange, maxSizeExchange);
 
@@ -233,6 +238,8 @@ int main(int argc, char **argv)
         // bandwidth tests
         // ---------------------------------------
         switch (bwOption) {
+        case -1:
+            break;
         case 0:
             if (chooseSingleNbr)
             {

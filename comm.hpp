@@ -194,9 +194,110 @@ class Comm
 	    a2a_send_dat.clear(); \
             a2a_recv_dat.clear(); \
         } while(0)
-
-
+            
 #define COMM_COMMON_MPI3 \
+        do { \
+            comm_ = g_->get_comm(); \
+            MPI_Comm_size(comm_, &size_); \
+            MPI_Comm_rank(comm_, &rank_); \
+            const GraphElem lne = g_->get_lne(); \
+            lnv_ = g_->get_lnv(); \
+            std::vector<GraphElem> a2a_send_dat(size_), a2a_recv_dat(size_); \
+            /* track outgoing ghosts not owned by me */ \
+            for (GraphElem i = 0; i < lnv_; i++) \
+            { \
+                GraphElem e0, e1; \
+                g_->edge_range(i, e0, e1); \
+                for (GraphElem e = e0; e < e1; e++) \
+                { \
+                    Edge const& edge = g_->get_edge(e); \
+                    const int owner = g_->get_owner(edge.tail_); \
+                    if (owner != rank_) \
+                    { \
+                        if (std::find(targets_.begin(), targets_.end(), owner) == targets_.end()) \
+                        { \
+                            targets_.push_back(owner); \
+                            target_pindex_.insert({owner, outdegree_}); \
+                            outdegree_++; \
+                            nghosts_in_target_.push_back(0); \
+                        } \
+                        out_nghosts_++; \
+                        a2a_send_dat[owner]++; \
+                        nghosts_in_target_[target_pindex_[owner]]++; \
+                    } \
+                } \
+            } \
+            assert(outdegree_ == nghosts_in_target_.size()); \
+            if (shrinkp_ > 0.0) \
+            { \
+                GraphElem new_nghosts = 0; \
+                std::unordered_map<int, int>::iterator peit = target_pindex_.begin(); \
+                for (int p = 0; p < outdegree_; p++) \
+                { \
+                    nghosts_in_target_[p] = (int)((shrinkp_ * (float)nghosts_in_target_[p]) / (float)100); \
+                    if (nghosts_in_target_[p] == 0) \
+                        nghosts_in_target_[p] = 1; \
+                    new_nghosts += nghosts_in_target_[p]; \
+                    a2a_send_dat[peit->first] = nghosts_in_target_[p]; \
+                    ++peit; \
+                } \
+                GraphElem nghosts[2] = {out_nghosts_, new_nghosts}, all_nghosts[2] = {0, 0}; \
+                MPI_Reduce(nghosts, all_nghosts, 2, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_); \
+                out_nghosts_ = new_nghosts; \
+                if (rank_ == 0) \
+                { \
+                    std::cout << "Considering only " << shrinkp_ << "% of overall #ghosts, previous total outgoing #ghosts: " \
+                    << all_nghosts[0] << ", current total outgoing #ghosts: " << all_nghosts[1] << std::endl; \
+                } \
+            } \
+            /* track incoming communication (processes for which I am a ghost) */ \
+            /* send to PEs in targets_ list about shared ghost info */ \
+            MPI_Alltoall(a2a_send_dat.data(), 1, MPI_GRAPH_TYPE, a2a_recv_dat.data(), 1, MPI_GRAPH_TYPE, comm_); \
+            MPI_Barrier(comm_); \
+            for (int p = 0; p < size_; p++) \
+            { \
+                if (a2a_recv_dat[p] > 0) \
+                { \
+                    source_pindex_.insert({p, indegree_}); \
+                    sources_.push_back(p); \
+                    nghosts_in_source_.push_back(a2a_recv_dat[p]); \
+                    indegree_++; \
+                    in_nghosts_ += a2a_recv_dat[p]; \
+                } \
+            } \
+            assert(indegree_ == nghosts_in_source_.size()); \
+            sbuf_ = new char[out_nghosts_*max_size_]; \
+            rbuf_ = new char[in_nghosts_*max_size_]; \
+            assert(in_nghosts_ >= indegree_); \
+            assert(out_nghosts_ >= outdegree_); \
+            sreq_ = new MPI_Request[out_nghosts_]; \
+            rreq_ = new MPI_Request[in_nghosts_]; \
+          MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
+              comm_, &rbuf2_, &window); \
+            shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
+            signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_); \
+            /* for large graphs, if iteration counts are not reduced it takes >> time */\
+        if (lne > 1000) \
+            { \
+                if (bw_loop_count_ == BW_LOOP_COUNT) \
+                    bw_loop_count_ = bw_loop_count_large_; \
+                if (bw_skip_count_ == BW_SKIP_COUNT) \
+                    bw_skip_count_ = bw_skip_count_large_; \
+            } \
+        a2a_send_dat.clear(); \
+            a2a_recv_dat.clear(); \
+            /* create graph topology communicator for neighbor collectives */ \
+            MPI_Dist_graph_create_adjacent(comm_, sources_.size(), sources_.data(), \
+                    MPI_UNWEIGHTED, targets_.size(), targets_.data(), MPI_UNWEIGHTED, \
+                    MPI_INFO_NULL, 0 , &nbr_comm_); \
+            /* following is not necessary, just checking */ \
+            int weighted, indeg, outdeg; \
+            MPI_Dist_graph_neighbors_count(nbr_comm_, &indeg, &outdeg, &weighted); \
+            assert(indegree_ == indeg); \
+            assert(outdegree_ == outdeg); \
+        } while(0)
+
+#define COMM_COMMON_MPI3_NO_NGHOSTS \
         do { \
             comm_ = g_->get_comm(); \
             MPI_Comm_size(comm_, &size_); \
