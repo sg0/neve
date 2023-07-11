@@ -130,6 +130,10 @@ class Comm
               comm_, &rbuf2_, &window); \
             shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
             signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_); \
+            if (!shmem_window || !signals) { \
+                perror("SHMEM malloc failed in COMM_COMMON_LT_MPI3\n"); \
+                exit(1); \
+            } \
 	    a2a_send_dat.clear(); \
             a2a_recv_dat.clear(); \
             /* create graph topology communicator for neighbor collectives */ \
@@ -276,6 +280,10 @@ class Comm
               comm_, &rbuf2_, &window); \
             shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
             signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_); \
+            if (!shmem_window || !signals) { \
+                perror("SHMEM malloc failed in COMM_COMMON_MPI3\n"); \
+                exit(1); \
+            } \
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
         if (lne > 1000) \
             { \
@@ -378,6 +386,10 @@ class Comm
               comm_, &rbuf2_, &window); \
             shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
             signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_); \
+            if (!shmem_window || !signals) { \
+                perror("SHMEM malloc failed in COMM_COMMON_MPI3_NO_NGHOSTS\n"); \
+                exit(1); \
+            } \
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
         if (lne > 1000) \
             { \
@@ -777,7 +789,7 @@ class Comm
             shmem_barrier_all();
             for (int p = 0; p < outdegree_; p++)
             {
-                shmem_char_put(shmem_window, sbuf_, size, targets_[p]);
+                shmem_char_put_nbi(shmem_window, sbuf_, size, targets_[p]);
             }
             shmem_barrier_all();
         }
@@ -1082,7 +1094,6 @@ class Comm
         
         inline void comm_kernel_bw_shmem_put_signal(GraphElem const& size){
             GraphElem rng = 0, sng = 0;            // sends
-            printf("shmem put signal\n");
             
             MPI_Win_fence(0, window);
             for (int p = 0; p < outdegree_; p++)
