@@ -129,7 +129,7 @@ class Comm
             MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
               comm_, &rbuf2_, &window); \
             shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
-            signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_); \
+            signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
             if (!shmem_window || !signals) { \
                 perror("SHMEM malloc failed in COMM_COMMON_LT_MPI3\n"); \
                 exit(1); \
@@ -276,10 +276,11 @@ class Comm
             assert(out_nghosts_ >= outdegree_); \
             sreq_ = new MPI_Request[out_nghosts_]; \
             rreq_ = new MPI_Request[in_nghosts_]; \
-          MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
+            MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
               comm_, &rbuf2_, &window); \
             shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
-            signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_); \
+            signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
+            printf("mallocing %ld and %ld\n", in_nghosts_*max_size_*sizeof(char), sizeof(uint64_t) * outdegree_); \
             if (!shmem_window || !signals) { \
                 perror("SHMEM malloc failed in COMM_COMMON_MPI3\n"); \
                 exit(1); \
@@ -385,7 +386,7 @@ class Comm
           MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
               comm_, &rbuf2_, &window); \
             shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
-            signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_); \
+            signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
             if (!shmem_window || !signals) { \
                 perror("SHMEM malloc failed in COMM_COMMON_MPI3_NO_NGHOSTS\n"); \
                 exit(1); \
