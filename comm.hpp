@@ -129,11 +129,11 @@ class Comm
             MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
               comm_, &rbuf2_, &window); \
             shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
-            signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
+            /* signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
             if (!shmem_window || !signals) { \
                 perror("SHMEM malloc failed in COMM_COMMON_LT_MPI3\n"); \
                 exit(1); \
-            } \
+            } */ \
 	    a2a_send_dat.clear(); \
             a2a_recv_dat.clear(); \
             /* create graph topology communicator for neighbor collectives */ \
@@ -279,12 +279,12 @@ class Comm
             MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
               comm_, &rbuf2_, &window); \
             shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
-            signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
+            /* signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
             printf("mallocing %ld and %ld\n", in_nghosts_*max_size_*sizeof(char), sizeof(uint64_t) * outdegree_); \
             if (!shmem_window || !signals) { \
                 perror("SHMEM malloc failed in COMM_COMMON_MPI3\n"); \
                 exit(1); \
-            } \
+            } */\
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
         if (lne > 1000) \
             { \
@@ -386,11 +386,11 @@ class Comm
           MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
               comm_, &rbuf2_, &window); \
             shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
-            signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
+            /* signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
             if (!shmem_window || !signals) { \
                 perror("SHMEM malloc failed in COMM_COMMON_MPI3_NO_NGHOSTS\n"); \
                 exit(1); \
-            } \
+            } */ \
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
         if (lne > 1000) \
             { \
@@ -639,7 +639,7 @@ class Comm
         void free_shmem()
         {
             shmem_free(shmem_window);
-            shmem_free(signals);
+            // shmem_free(signals);
         }
         
         ~Comm() 
@@ -770,18 +770,18 @@ class Comm
             {
                 // shmemx_char_put_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
 #if defined(CRAY_SHMEM)
-                shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
+                // shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
 #else
                 // OpenSHMEM's signal routines require the sig_op parameter to indiate whether
                 // an update to a signal data object is a set or an add.
                 // http://www.openshmem.org/site/sites/default/site_files/openshmem-1.5rc2.pdf
-                shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
+                // shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
 #endif
 
             }
             for (int i = 0; i < outdegree_; i ++)
             {
-                shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
+                // shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
             }
         }
         
@@ -1102,12 +1102,12 @@ class Comm
                 for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
                 {
 #if defined(CRAY_SHMEM)
-                    shmem_putmem_signal(shmem_window, &sbuf_[sng*size], size, &signals[p], 1, targets_[p]);
+                    // shmem_putmem_signal(shmem_window, &sbuf_[sng*size], size, &signals[p], 1, targets_[p]);
 #else
                     // OpenSHMEM's signal routines require the sig_op parameter to indiate whether
                     // an update to a signal data object is a set or an add.
                     // http://www.openshmem.org/site/sites/default/site_files/openshmem-1.5rc2.pdf
-                    shmem_putmem_signal(shmem_window, &sbuf_[sng*size], size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
+                    // shmem_putmem_signal(shmem_window, &sbuf_[sng*size], size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
 #endif
                     sng++;
                 }
@@ -1115,7 +1115,7 @@ class Comm
             
             for (int i = 0; i < outdegree_; i ++)
             {
-                shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
+                // shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
             }
         }
         
@@ -2301,7 +2301,7 @@ class Comm
         char *rbuf2_;
         MPI_Win window;
         char *shmem_window;
-        uint64_t *signals;
+        // uint64_t *signals;
 
         // ranges
         GraphElem max_size_, min_size_, large_msg_size_;
