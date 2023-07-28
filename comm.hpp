@@ -1939,8 +1939,8 @@ class BFS
     public:
         BFS(Graph* g): 
             g_(g), visited_(nullptr), pred_(nullptr), bufsize_(DEF_BFS_BUFSIZE),
-            comm_(MPI_COMM_NULL), rank_(MPI_PROC_NULL), size_(0), targets_(0), 
-            pdegree_(0), pindex_(0), ract_(0), sact_(nullptr), sctr_(nullptr),
+            comm_(MPI_COMM_NULL), rank_(MPI_PROC_NULL), size_(0), 
+            ract_(0), sact_(nullptr), sctr_(nullptr),
             sbuf_(nullptr), rbuf_(nullptr), sreq_(nullptr), rreq_(MPI_REQUEST_NULL), 
             oldq_(nullptr), newq_(nullptr), nranks_done_(0), newq_count_(0), 
             oldq_count_(0), seed_(DEF_BFS_SEED), edge_visit_count_(0)
@@ -1951,48 +1951,19 @@ class BFS
             MPI_Comm_size(comm_, &size_);
             MPI_Comm_rank(comm_, &rank_);
 
-            for (GraphElem i = 0; i < lnv; i++)
-            {
-                GraphElem e0, e1;
-                g_->edge_range(i, e0, e1);
-
-                if ((e0 + 1) == e1)
-                    continue;
-
-                for (GraphElem m = e0; m < e1; m++)
-                {
-                    Edge const& edge_m = g_->get_edge(m);
-                    const int owner = g_->get_owner(edge_m.tail_);
-
-                    if (owner != rank_)
-                    {
-                        if (std::find(targets_.begin(), targets_.end(), owner) 
-                                == targets_.end())
-                            targets_.push_back(owner);
-                    }
-                }
-            }
-
-            MPI_Barrier(comm_);
-
-            pdegree_ = targets_.size();
-
-            for (int i = 0; i < pdegree_; i++)
-                pindex_.insert({targets_[i], i});
-
             visited_ = new GraphElem[lnv];
             pred_    = new GraphElem[lnv];
             oldq_    = new GraphElem[lnv];
             newq_    = new GraphElem[lnv];
             rbuf_    = new GraphElem[bufsize_*2];
-            sbuf_    = new GraphElem[pdegree_*bufsize_*2];
-            sctr_    = new GraphElem[pdegree_];
-            sreq_    = new MPI_Request[pdegree_];
-            sact_    = new GraphElem[pdegree_];
+            sbuf_    = new GraphElem[size_*bufsize_*2];
+            sctr_    = new GraphElem[size_];
+            sreq_    = new MPI_Request[size_];
+            sact_    = new GraphElem[size_];
 
-            std::fill(sreq_, sreq_ + pdegree_, MPI_REQUEST_NULL);
-            std::fill(sctr_, sctr_ + pdegree_, 0);
-            std::fill(sact_, sact_ + pdegree_, 0);
+            std::fill(sreq_, sreq_ + size_, MPI_REQUEST_NULL);
+            std::fill(sctr_, sctr_ + size_, 0);
+            std::fill(sact_, sact_ + size_, 0);
             std::fill(oldq_, oldq_ + lnv, -1);
             std::fill(newq_, newq_ + lnv, -1);
             std::fill(pred_, pred_ + lnv, -1);
@@ -2057,7 +2028,7 @@ class BFS
                     }
 
                     /* Restart the receive if more messages will be coming. */
-                    if (nranks_done_ < pdegree_) 
+                    if (nranks_done_ < size_) 
                     {
                         MPI_Irecv(rbuf_, bufsize_ * 2, MPI_GRAPH_TYPE, MPI_ANY_SOURCE, 0, comm_, &rreq_);
                         ract_ = 1;
@@ -2068,7 +2039,7 @@ class BFS
             }
 
             /* Mark any sends that completed as inactive so their buffers can be reused. */
-            for (int c = 0; c < pdegree_; ++c) 
+            for (int c = 0; c < size_; ++c) 
             {
                 if (sact_[c]) 
                 {
@@ -2082,28 +2053,28 @@ class BFS
 
         void nbsend(GraphElem owner)
         {
-            MPI_Isend(&sbuf_[pindex_[owner] * bufsize_ * 2], bufsize_ * 2, MPI_GRAPH_TYPE, 
-                    owner, 0, comm_, &sreq_[pindex_[owner]]);
+            MPI_Isend(&sbuf_[owner * bufsize_ * 2], bufsize_ * 2, MPI_GRAPH_TYPE, 
+                    owner, 0, comm_, &sreq_[owner]);
 
-            sact_[pindex_[owner]] = 1;
-            sctr_[pindex_[owner]] = 0;
+            sact_[owner] = 1;
+            sctr_[owner] = 0;
         }
         
         void nbsend_count(GraphElem owner)
         {
-            MPI_Isend(&sbuf_[pindex_[owner] * bufsize_ * 2], sctr_[pindex_[owner]], MPI_GRAPH_TYPE, 
-                    owner, 0, comm_, &sreq_[pindex_[owner]]);
+            MPI_Isend(&sbuf_[owner * bufsize_ * 2], sctr_[owner], MPI_GRAPH_TYPE, 
+                    owner, 0, comm_, &sreq_[owner]);
 
-            sact_[pindex_[owner]] = 1;
-            sctr_[pindex_[owner]] = 0;
+            sact_[owner] = 1;
+            sctr_[owner] = 0;
         }
 
         void nbsend_zero(GraphElem owner)
         {
             /* Base address is meaningless for 0-sends. */
-            MPI_Isend(&sbuf_[0], 0, MPI_GRAPH_TYPE, owner, 0, comm_, &sreq_[pindex_[owner]]);
+            MPI_Isend(&sbuf_[0], 0, MPI_GRAPH_TYPE, owner, 0, comm_, &sreq_[owner]);
 
-            sact_[pindex_[owner]] = 1;
+            sact_[owner] = 1;
         }
 
         // reimplementation of graph500 BFS
@@ -2132,11 +2103,11 @@ class BFS
                 while(!done)
 #endif
                 {
-                    memset(sctr_, 0, pdegree_ * sizeof(GraphElem));
-                    nranks_done_ = 0;
+                    memset(sctr_, 0, size_ * sizeof(GraphElem));
+                    nranks_done_ = 1;
 
                     /* Start the initial receive. */
-                    if (nranks_done_ < pdegree_) 
+                    if (nranks_done_ < size_) 
                     {
                         MPI_Irecv(rbuf_, bufsize_ * 2, MPI_GRAPH_TYPE, MPI_ANY_SOURCE, 0, comm_, &rreq_);
                         ract_ = 1;
@@ -2162,7 +2133,6 @@ class BFS
                         {
                             Edge const& edge = g_->get_edge(m);
                             const int owner = g_->get_owner(edge.tail_);
-                            const GraphElem pidx = pindex_[owner];
 
                             if (owner == rank_)
                             {
@@ -2177,46 +2147,46 @@ class BFS
                             else
                             {
                                 /* Wait for buffer to be available */
-                                while (sact_[pidx]) 
+                                while (sact_[owner]) 
                                     process_msgs();
 
-                                GraphElem c = sctr_[pidx];
-                                sbuf_[pidx * bufsize_ * 2 + c]     = edge.tail_;
-                                sbuf_[pidx * bufsize_ * 2 + c + 1] = src;
-                                sctr_[pidx] += 2;
+                                GraphElem c = sctr_[owner];
+                                sbuf_[owner * bufsize_ * 2 + c]     = edge.tail_;
+                                sbuf_[owner * bufsize_ * 2 + c + 1] = src;
+                                sctr_[owner] += 2;
 
-                                if (sctr_[pidx] == (bufsize_ * 2))
+                                if (sctr_[owner] == (bufsize_ * 2))
                                     nbsend(owner);
                             }
                         }
                     }
 
                     /* Flush any coalescing buffers that still have messages. */
-                    for (int const& p : targets_)
+                    for (int p = 0; p < size_; p++)
                     {
-                        if (sctr_[pindex_[p]] != 0) 
+                        if (sctr_[p] != 0) 
                         {
-                            while (sact_[pindex_[p]]) 
+                            while (sact_[p]) 
                                 process_msgs();
 
                             nbsend_count(p);
                         }
 
                         /* Wait until all sends to this destination are done. */
-                        while (sact_[pindex_[p]]) 
+                        while (sact_[p]) 
                             process_msgs();
 
                         /* Tell the destination that we are done sending to them. */
                         /* Signal no more sends */
                         nbsend_zero(p);
 
-                        while (sact_[pindex_[p]]) 
+                        while (sact_[p]) 
                             process_msgs();
                     }
 
                     /* Wait until everyone else is done (and thus couldn't send us any more
                      * messages). */
-                    while (nranks_done_ < pdegree_) 
+                    while (nranks_done_ < size_) 
                         process_msgs();
 
                     /* Test globally if all queues are empty. */
@@ -2361,11 +2331,9 @@ class BFS
         Graph* g_;
 
         int rank_, size_;
-        std::vector<int> targets_;
-        std::unordered_map<int, int> pindex_, mate_; 
         MPI_Comm comm_;
 
-        GraphElem bufsize_, pdegree_, newq_count_, oldq_count_, nranks_done_, ract_, seed_, edge_visit_count_;
+        GraphElem bufsize_, newq_count_, oldq_count_, nranks_done_, ract_, seed_, edge_visit_count_;
         GraphElem *sbuf_, *rbuf_, *pred_, *visited_, *oldq_, *newq_, *sctr_, *sact_;
         MPI_Request *sreq_, rreq_;
 };
