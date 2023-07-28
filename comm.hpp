@@ -2104,7 +2104,7 @@ class BFS
 #endif
                 {
                     memset(sctr_, 0, size_ * sizeof(GraphElem));
-                    nranks_done_ = 1;
+                    nranks_done_ = 0;
 
                     /* Start the initial receive. */
                     if (nranks_done_ < size_) 
