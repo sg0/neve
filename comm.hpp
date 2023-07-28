@@ -2067,8 +2067,7 @@ class BFS
                     break;
             }
 
-            /* Mark any sends that completed as inactive so their buffers can be
-             * reused. */
+            /* Mark any sends that completed as inactive so their buffers can be reused. */
             for (int c = 0; c < pdegree_; ++c) 
             {
                 if (sact_[c]) 
@@ -2157,7 +2156,7 @@ class BFS
                         g_->edge_range(g_->global_to_local(src), e0, e1);
 
                         if ((e0 + 1) == e1)
-                            continue;
+                          continue;
 
                         for (GraphElem m = e0; m < e1; m++)
                         {
@@ -2263,11 +2262,61 @@ class BFS
             std::vector<GraphElem> bfs_roots(nbfs_roots);
             std::vector<double> bfs_times(nbfs_roots);
 
-            for (GraphElem& r : bfs_roots)
-                r = uid(gen);
+            double t1 = MPI_Wtime();
 
-            std::sort(bfs_roots.begin(), bfs_roots.end());
-            bfs_roots.erase(std::unique(bfs_roots.begin(), bfs_roots.end()), bfs_roots.end());
+            // calculate bfs roots
+            GraphElem counter = 0, bfs_root_idx = 0, nv = g_->get_nv();
+            
+            for (bfs_root_idx = 0; bfs_root_idx < nbfs_roots; ++bfs_root_idx) 
+            {
+              GraphElem root;
+
+              while (1) 
+              {
+                root = uid(gen);
+
+                if (counter > nv) 
+                  break;
+                int is_duplicate = 0;
+
+                for (GraphElem i = 0; i < bfs_root_idx; ++i) 
+                {
+                  if (root == bfs_roots[i]) 
+                  {
+                    is_duplicate = 1;
+                    break;
+                  }
+                }
+
+                if (is_duplicate) 
+                  continue;
+
+                int root_ok = 0;
+                if (g_->get_owner(root) == rank_)
+                {
+                  GraphElem e0, e1;
+                  g_->edge_range(g_->global_to_local(root), e0, e1);
+                  if ((e0 + 1) != e1)
+                    root_ok = 1;
+                }
+                
+                MPI_Barrier(comm_);
+                MPI_Allreduce(MPI_IN_PLACE, &root_ok, 1, MPI_INT, MPI_LOR, MPI_COMM_WORLD);
+                
+                if (root_ok) 
+                  break;
+              }
+
+              bfs_roots[bfs_root_idx] = root;
+            }
+
+            nbfs_roots = bfs_root_idx;
+
+            double t2 = MPI_Wtime() - t1;
+            double root_t = 0.0;
+            MPI_Reduce(&t2, &root_t, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
+            if (rank_ == 0)
+              fprintf(stderr, "Average time(s) taken to calculate %d BFS root vertices: %f\n", nbfs_roots, root_t);
 
             int test_ctr = 0;
 
@@ -2275,13 +2324,12 @@ class BFS
             {
                 if (rank_ == 0) 
                     fprintf(stderr, "Running BFS %d\n", test_ctr);
-
-                /* Clear the pred array. */
-                memset(pred_, 0, g_->get_lnv() * sizeof(GraphElem));
-                double g_bfs_time = 0.0;
+            
+                /* Set all vertices to "not visited." */
+                std::fill(pred_, pred_ + g_->get_lnv(), 0);
 
                 /* Do the actual BFS. */
-                double bfs_start = MPI_Wtime();
+                double bfs_start = MPI_Wtime(), g_bfs_time = 0.0;
                 run_bfs(r);
                 double bfs_stop = MPI_Wtime();
                 bfs_times[test_ctr] = bfs_stop - bfs_start;
