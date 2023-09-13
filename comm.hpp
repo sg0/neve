@@ -126,14 +126,6 @@ class Comm
             rbuf_ = new char[indegree_*max_size_]; \
             sreq_ = new MPI_Request[outdegree_]; \
             rreq_ = new MPI_Request[indegree_]; \
-            MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
-              comm_, &rbuf2_, &window); \
-            shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
-            /* signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
-            if (!shmem_window || !signals) { \
-                perror("SHMEM malloc failed in COMM_COMMON_LT_MPI3\n"); \
-                exit(1); \
-            } */ \
 	    a2a_send_dat.clear(); \
             a2a_recv_dat.clear(); \
             /* create graph topology communicator for neighbor collectives */ \
@@ -276,15 +268,6 @@ class Comm
             assert(out_nghosts_ >= outdegree_); \
             sreq_ = new MPI_Request[out_nghosts_]; \
             rreq_ = new MPI_Request[in_nghosts_]; \
-            MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
-              comm_, &rbuf2_, &window); \
-            shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
-            /* signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
-            printf("mallocing %ld and %ld\n", in_nghosts_*max_size_*sizeof(char), sizeof(uint64_t) * outdegree_); \
-            if (!shmem_window || !signals) { \
-                perror("SHMEM malloc failed in COMM_COMMON_MPI3\n"); \
-                exit(1); \
-            } */\
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
         if (lne > 1000) \
             { \
@@ -383,14 +366,6 @@ class Comm
             assert(out_nghosts_ >= outdegree_); \
             sreq_ = new MPI_Request[out_nghosts_]; \
             rreq_ = new MPI_Request[in_nghosts_]; \
-          MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
-              comm_, &rbuf2_, &window); \
-            shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char)); \
-            /* signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_); \
-            if (!shmem_window || !signals) { \
-                perror("SHMEM malloc failed in COMM_COMMON_MPI3_NO_NGHOSTS\n"); \
-                exit(1); \
-            } */ \
             /* for large graphs, if iteration counts are not reduced it takes >> time */\
         if (lne > 1000) \
             { \
@@ -636,10 +611,39 @@ class Comm
                 MPI_Comm_free(&nbr_comm_); 
         }
         
-        void free_shmem()
+        void allocate_MPI_RMA_window() {
+            MPI_Win_allocate(in_nghosts_*max_size_*sizeof(char), sizeof(char), MPI_INFO_NULL, \
+              comm_, &rbuf2_, &window);
+        }
+        
+        void allocate_SHMEM_window() {
+            shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char));
+            signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_);
+            if (!shmem_window || !signals) {
+                perror("SHMEM malloc failed!\n");
+                exit(1);
+            }
+        }
+        
+        void free_MPI_window()
+        {
+                MPI_Win_free(&window);
+        }
+        
+        void free_SHMEM_window()
         {
             shmem_free(shmem_window);
-            // shmem_free(signals);
+            free(signals);
+        }
+        
+        void lock_MPI_window()
+        {
+                MPI_Win_lock_all(MPI_MODE_NOCHECK, window);
+        }
+
+        void unlock_MPI_window()
+        {
+                MPI_Win_unlock_all(window);
         }
         
         ~Comm() 
@@ -768,20 +772,20 @@ class Comm
         {
             for (int p = 0; p < outdegree_; p++)
             {
-                // shmemx_char_put_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
 #if defined(CRAY_SHMEM)
-                // shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
+                shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
 #else
                 // OpenSHMEM's signal routines require the sig_op parameter to indiate whether
                 // an update to a signal data object is a set or an add.
-                // http://www.openshmem.org/site/sites/default/site_files/openshmem-1.5rc2.pdf
-                // shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
+                // http://openshmem.org/site/sites/default/site_files/OpenSHMEM-1.5.pdf
+//                shmem_char_put_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
+                shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
 #endif
 
             }
             for (int i = 0; i < outdegree_; i ++)
             {
-                // shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
+                 shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
             }
         }
         
@@ -1102,12 +1106,12 @@ class Comm
                 for (GraphElem g = 0; g < nghosts_in_target_[p]; g++)
                 {
 #if defined(CRAY_SHMEM)
-                    // shmem_putmem_signal(shmem_window, &sbuf_[sng*size], size, &signals[p], 1, targets_[p]);
+                     shmem_putmem_signal(shmem_window, &sbuf_[sng*size], size, &signals[p], 1, targets_[p]);
 #else
                     // OpenSHMEM's signal routines require the sig_op parameter to indiate whether
                     // an update to a signal data object is a set or an add.
                     // http://www.openshmem.org/site/sites/default/site_files/openshmem-1.5rc2.pdf
-                    // shmem_putmem_signal(shmem_window, &sbuf_[sng*size], size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
+                     shmem_putmem_signal(shmem_window, &sbuf_[sng*size], size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
 #endif
                     sng++;
                 }
@@ -1115,7 +1119,7 @@ class Comm
             
             for (int i = 0; i < outdegree_; i ++)
             {
-                // shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
+                 shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
             }
         }
         
@@ -2301,7 +2305,7 @@ class Comm
         char *rbuf2_;
         MPI_Win window;
         char *shmem_window;
-        // uint64_t *signals;
+         uint64_t *signals;
 
         // ranges
         GraphElem max_size_, min_size_, large_msg_size_;

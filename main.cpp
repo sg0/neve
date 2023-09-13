@@ -233,7 +233,6 @@ int main(int argc, char **argv)
         MPI_Barrier(MPI_COMM_WORLD);
 
         t0 = MPI_Wtime();
-        printf("option is %d\n", bwOption);
         // ---------------------------------------
         // bandwidth tests
         // ---------------------------------------
@@ -261,6 +260,10 @@ int main(int argc, char **argv)
                     c->p2p_bw(0);
             }
             break;
+        case 2:
+            c->lock_MPI_window();
+            c->p2p_bw(bwOption);
+            c->unlock_MPI_window();
         default:
             c->p2p_bw(bwOption);
             break;
@@ -322,19 +325,27 @@ int main(int argc, char **argv)
             c->nbr_aga_lt();
             break;
         case 3: // MPI RMA with MPI_Rput using flush
+            c->allocate_MPI_RMA_window();
+            c->lock_MPI_window();
             c->p2p_lt(3);
+            c->lock_MPI_window();
             break;
         case 4: // MPI RMA with MPI_Rput using fence
+            c->allocate_MPI_RMA_window();
             c->p2p_lt(4);
             break;
         case 5: // MPI with nonblocking consensus
             c->p2p_lt(7);
             break;
         case 6: // SHMEM with barrier
+            c->allocate_SHMEM_window();
             c->p2p_lt(9);
+            c->free_SHMEM_window();
             break;
         case 7: // SHMEM with put_signal
+            c->allocate_SHMEM_window();
             c->p2p_lt(8);
+            c->free_SHMEM_window();
             break;
         default:
             break;
@@ -357,22 +368,19 @@ int main(int argc, char **argv)
             std::cout << "Resolution of MPI_Wtime: " << MPI_Wtick() << std::endl;
 #endif
         }
-    
-        c->free_shmem();
         c->destroy_nbr_comm();
         delete c;
     } // end latency/bandwidth tests
     
     MPI_Barrier(MPI_COMM_WORLD);
-   
+    shmem_barrier_all();
     shmem_finalize();
     
     int mpi_final;
     MPI_Finalized(&mpi_init);
     if (!mpi_final) {
-         MPI_Finalize();
+          MPI_Finalize();
     }
-
     return 0;
 }
 
