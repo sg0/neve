@@ -618,7 +618,7 @@ class Comm
         
         void allocate_SHMEM_window() {
             shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char));
-            signals = (uint64_t *)malloc(sizeof(uint64_t) * outdegree_);
+            signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_ * 500);
             if (!shmem_window || !signals) {
                 perror("SHMEM malloc failed!\n");
                 exit(1);
@@ -627,23 +627,23 @@ class Comm
         
         void free_MPI_window()
         {
-                MPI_Win_free(&window);
+            MPI_Win_free(&window);
         }
         
         void free_SHMEM_window()
         {
             shmem_free(shmem_window);
-            free(signals);
+            shmem_free(signals);
         }
         
         void lock_MPI_window()
         {
-                MPI_Win_lock_all(MPI_MODE_NOCHECK, window);
+            MPI_Win_lock_all(MPI_MODE_NOCHECK, window);
         }
 
         void unlock_MPI_window()
         {
-                MPI_Win_unlock_all(window);
+            MPI_Win_unlock_all(window);
         }
         
         ~Comm() 
@@ -778,10 +778,9 @@ class Comm
                 // OpenSHMEM's signal routines require the sig_op parameter to indiate whether
                 // an update to a signal data object is a set or an add.
                 // http://openshmem.org/site/sites/default/site_files/OpenSHMEM-1.5.pdf
-//                shmem_char_put_signal(shmem_window, sbuf_, size, &signals[p], 1, targets_[p]);
+                // shmem_char_put_signal(shmem_window, sbuf_, size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
                 shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
 #endif
-
             }
             for (int i = 0; i < outdegree_; i ++)
             {

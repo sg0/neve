@@ -328,11 +328,13 @@ int main(int argc, char **argv)
             c->allocate_MPI_RMA_window();
             c->lock_MPI_window();
             c->p2p_lt(3);
-            c->lock_MPI_window();
+            c->unlock_MPI_window();
+            c->free_MPI_window();
             break;
         case 4: // MPI RMA with MPI_Rput using fence
             c->allocate_MPI_RMA_window();
             c->p2p_lt(4);
+            c->free_MPI_window();
             break;
         case 5: // MPI with nonblocking consensus
             c->p2p_lt(7);
