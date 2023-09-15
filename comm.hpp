@@ -802,9 +802,7 @@ class Comm
         {
             for (int p = 0; p < outdegree_; p++)
             {
-                MPI_Win_lock(MPI_LOCK_SHARED, targets_[p], MPI_MODE_NOCHECK, window);
                 MPI_Rput(sbuf_, size, MPI_CHAR, targets_[p], 0, size, MPI_CHAR, window, sreq_ + p);
-                MPI_Win_unlock(targets_[p], window);
             }
             MPI_Waitall(outdegree_, sreq_, MPI_STATUSES_IGNORE);
             MPI_Win_flush_all(window);
