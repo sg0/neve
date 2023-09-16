@@ -239,7 +239,7 @@ int main(int argc, char **argv)
         switch (bwOption) {
         case -1:
             break;
-        case 0:
+        case 0: // Nonblocking send/recv
             if (chooseSingleNbr)
             {
                 if (me == 0)
@@ -260,12 +260,30 @@ int main(int argc, char **argv)
                     c->p2p_bw(0);
             }
             break;
-        case 2:
+        case 1: // MPI RMA with MPI_Rput using fence
+            c->allocate_MPI_RMA_window();
+            c->p2p_bw(bwOption);
+            c->free_MPI_window();
+            break;
+        case 2: // MPI RMA with MPI_Rput using flush
+            c->allocate_MPI_RMA_window();
             c->lock_MPI_window();
             c->p2p_bw(bwOption);
             c->unlock_MPI_window();
-        default:
+            c->free_MPI_window();
+            break;
+        case 3: // MPI with nonblocking consensus
             c->p2p_bw(bwOption);
+            break;
+        case 4: // SHMEM with barrier
+            c->allocate_SHMEM_window();
+            c->p2p_bw(bwOption);
+            c->free_SHMEM_window();
+            break;
+        case 5: // SHMEM with put_signal
+            c->allocate_SHMEM_window();
+            c->p2p_bw(bwOption);
+            c->free_SHMEM_window();
             break;
         }
         

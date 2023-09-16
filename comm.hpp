@@ -1062,7 +1062,7 @@ class Comm
 //            MPI_Waitall(in_nghosts_, rreq_, MPI_STATUSES_IGNORE);
 //            MPI_Waitall(out_nghosts_, sreq_, MPI_STATUSES_IGNORE);
 //        }
-        
+
         inline void comm_kernel_bw_rma_fence(GraphElem const& size){
             GraphElem rng = 0, sng = 0;            // sends
             
@@ -1121,8 +1121,7 @@ class Comm
         }
         
         inline void comm_kernel_bw_shmem_barrier(GraphElem const& size){
-            GraphElem rng = 0, sng = 0;            // sends
-//            printf("shmem barrier\n");
+            GraphElem rng = 0, sng = 0;    // sends
             
             shmem_barrier_all();
             for (int p = 0; p < outdegree_; p++)
@@ -1135,9 +1134,7 @@ class Comm
             }
             shmem_barrier_all();
         }
-        
-        
-  	
+
         // kernel for bandwidth using NBX 
         inline void comm_kernel_bw_nbx(GraphElem const& size)
         {
