@@ -42,6 +42,7 @@
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <getopt.h>
 
 #include <cassert>
 #include <cstdlib>
@@ -77,6 +78,8 @@ static bool performLTTest = false;
 static bool performWorkMax = false;
 static bool performWorkSum = false;
 static bool createRankOrder = false;
+static bool performBFS = false;
+static bool dumpSharedEdgesBetweenPEs = false;
 static int rankOrderType = 0;
 
 static bool chooseSingleNbr = false;
@@ -163,6 +166,9 @@ int main(int argc, char **argv)
     g->print_dist_stats();
     assert(g != nullptr);
 
+    if (dumpSharedEdgesBetweenPEs)
+        g->pg_matrix();
+
     if (createRankOrder) 
     {
         t0 = MPI_Wtime();
@@ -207,6 +213,13 @@ int main(int argc, char **argv)
         else
             std::cout << "Time to generate distributed graph of " 
                 << nvRGG << " vertices (in s): " << tdt << std::endl;
+    }
+
+
+    if (performBFS)
+    {
+        BFS b(g);
+        b.run_test();
     }
     
     if (bwOption != -1 || lttOption != -1)
@@ -406,84 +419,97 @@ int main(int argc, char **argv)
 
 void parseCommandLine(int argc, char** const argv)
 {
-  int ret;
-  optind = 1;
-
-  while ((ret = getopt(argc, argv, "f:y:r:n:lhp:m:x:bg:t:w:s:z:ud:o:a:")) != -1) {
-    switch (ret) {
-    case 'f':
-      inputFileName.assign(optarg);
-      break;
-    case 'y':
-      graphIsProcessGraph = true;
-      break;
-    case 'b':
-      readBalanced = true;
-      break;
-    case 'r':
-      ranksPerNode = atoi(optarg);
-      break;
-    case 'n':
-      nvRGG = atol(optarg);
-      if (nvRGG > 0)
-          generateGraph = true; 
-      break;
-    case 'l':
-      randomNumberLCG = true;
-      break;
-    case 'p':
-      randomEdgePercent = atof(optarg);
-      break;
-    case 'x':
-      maxSizeExchange = atol(optarg);
-      break;
-    case 'm':
-      minSizeExchange = atol(optarg);
-      break;
-    case 'g':
-      maxNumGhosts = atol(optarg);
-      break;
-    case 'w':
-      bwOption = atoi(optarg);
-      break;
-    case 't':
-      lttOption = atoi(optarg);
-      break;
-    case 'd':
-      performWork = atoi(optarg);
-      if (performWork > 0)
-          performWorkSum = true;
-      else
-          performWorkMax = true;
-      break;
-    case 'h':
-      hardSkip = true;
-      break;
-    case 's':
-      chooseSingleNbr = true;
-      processNbr = atoi(optarg);
-      break;
-    case 'z':
-      shrinkGraph = true;
-      graphShrinkPercent = atof(optarg);
-      break;
-    case 'u':
-      fallAsleep = true;
-      break;
-    case 'o':
-      rankOrderType = atoi(optarg);
-      createRankOrder = true;
-      break;
-    case 'a':
-      outputFileName.assign(optarg);
-      writeOutputFile = true;
-      createRankOrder = true;
-      break;
-    default:
-      assert(0 && "Should not reach here!!");
-      break;
-    }
+  int c;
+  while (1) {
+        int option_index = 0;
+        static struct option long_options[] = {
+            {"graph",             required_argument, 0,  'g' }, // or -g
+            {"distribute-equal",  no_argument,       0,  1   },
+            {"size",              required_argument, 0,  'n' }, // or -n
+            {"lcg",               no_argument,       0,  3   },
+            {"extra-edges",       required_argument, 0,  'p' }, // or -p
+            {"nranks",            required_argument, 0,  'r' }, // or -r
+            {"bandwidth",         required_argument, 0,  6   },
+            {"latency",           required_argument, 0,  7   },
+            {"minimum",           required_argument, 0,  8   },
+            {"maximum",           required_argument, 0,  9   },
+            {"perform-work",      required_argument, 0,  10  },
+            {"analyze-spe",       required_argument, 0,  11  },
+            {"max-ghosts",        required_argument, 0,  12  },
+            {"order",             required_argument, 0,  13  },
+            {"bfs",               no_argument,       0,  14  },
+            {"save",              required_argument, 0,  15  },
+            {0,                   0,                 0,  16  }
+        };
+        c = getopt_long(argc, argv, "g:n:p:r:", long_options, &option_index);
+        if (c == -1)
+            break;
+        
+        switch (c) {
+            case 'g':
+                inputFileName.assign(optarg);
+                break;
+            case 1:
+                readBalanced = true;
+                break;
+            case 'n':
+              nvRGG = atol(optarg);
+              if (nvRGG > 0)
+                  generateGraph = true; 
+              break;
+            case 3:
+                randomNumberLCG = true;
+                break;
+            case 'p':
+                randomEdgePercent = atof(optarg);
+                break;
+            case 'r':
+                ranksPerNode = atoi(optarg);
+                break;
+            case 6:
+                bwOption = atoi(optarg);
+                break;
+            case 7:
+                lttOption = atoi(optarg);
+                break;
+            case 8:
+                minSizeExchange = atol(optarg);
+                break;
+            case 9:
+                maxSizeExchange = atol(optarg);
+                break;
+            case 10:
+                performWork = atoi(optarg);
+                if (performWork > 0)
+                    performWorkSum = true;
+                else
+                    performWorkMax = true;
+                break;
+            case 11:
+                chooseSingleNbr = true;
+                processNbr = atoi(optarg);
+                break;
+            case 12:
+                maxNumGhosts = atol(optarg);
+                break;
+            case 13:
+                rankOrderType = atoi(optarg);
+                createRankOrder = true;
+                break;
+            case 14:
+                performBFS = true;
+                break;
+            case 15:
+                outputFileName.assign(optarg);
+                writeOutputFile = true;
+                createRankOrder = true;
+                break;
+            default:
+                assert(0 && "Should not reach here!!");
+                break;
+        }
   }
+  
   // warnings/info
   if (me == 0 && lttOption != -1 && maxNumGhosts) 
   {

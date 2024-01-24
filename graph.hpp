@@ -291,9 +291,11 @@ class Graph
 				for(GraphElem j = 0; j < ELEMS_PER_CACHE_LINE; j++) { 
 					if ((i + j) >= nv_)
 						break;
+                                        GraphWeight sum = 0.0;
 					for (GraphElem e = edge_indices[j]; e < edge_indices[j+1]; e++) {
-						vertex_degree[j] += edge_list_[e].weight_;
+						sum += edge_list_[e].weight_;
 					}
+					vertex_degree[j] = sum;
 				}
 			}
 #ifdef LIKWID_MARKER_ENABLE
@@ -339,10 +341,12 @@ class Graph
                 #pragma omp task
 		    {
 #endif
+		GraphWeight sum = 0.0;
                 for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
                 {
-                    vertex_degree_[i] += edge_list_[e].weight_;
+                    sum += edge_list_[e].weight_;
                 }
+                    vertex_degree_[i] = sum;
 #ifdef USE_OMP_TASKS_FOR
 		    }
 #endif
@@ -892,6 +896,9 @@ class GenerateRGG
 };
 
 #else // MPI per process graph instance
+#if defined(ENABLE_HWLOC)
+#include "hwloc.h"
+#endif
 class Graph
 {
     public:
@@ -1772,6 +1779,61 @@ class Graph
             nbr_pes.clear();
             rcounts.clear();
             displs.clear();
+        }
+
+	void pg_matrix() const
+        {
+            std::vector<GraphElem> nbr_pes(size_*size_, 0), nbr_pes_root;
+	    std::string outfile = "NEVE_PG_MATRIX." + std::to_string(size_); 
+
+            for (GraphElem v = 0; v < lnv_; v++)
+            {
+                GraphElem e0, e1;
+                this->edge_range(v, e0, e1);
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    Edge const& edge = this->get_edge(e);
+                    const int owner = this->get_owner(edge.tail_); 
+                    if (owner != rank_)
+                    {
+                        nbr_pes[rank_*size_+owner] += 1;
+                        nbr_pes[owner*size_+rank_] += 1;
+                    }
+                }
+            }
+
+            if (rank_ == 0)
+                nbr_pes_root.resize(size_ * size_, 0);
+
+            MPI_Barrier(comm_);
+
+            MPI_Reduce(nbr_pes.data(), nbr_pes_root.data(), size_*size_, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+                       
+	    if (rank_ == 0)
+            {
+                std::ofstream ofile;
+                ofile.open(outfile.c_str(), std::ofstream::out);
+
+                for (GraphElem p = 0; p < size_; p++)
+                {
+                    for (GraphElem q = 0; q < size_; q++)
+                    {
+                        if (q == size_-1)
+                            ofile << nbr_pes_root[p*size_+q];
+                        else
+                            ofile << nbr_pes_root[p*size_+q] << ",";
+                    }
+                    ofile << std::endl;
+                }
+                ofile.close();
+
+                std::cout << "Process graph matrix file: " << outfile << std::endl;
+                std::cout << "-------------------------------------------------------" << std::endl;
+            }
+            
+            MPI_Barrier(comm_);
+
+            nbr_pes.clear();
         }
 
         // public variables
