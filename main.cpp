@@ -165,7 +165,9 @@ int main(int argc, char **argv)
         else if (rankOrderType == 5)
             g->weighted_rank_order(ascending);
         else if (rankOrderType == 6)
-            g->weighted_rank_order(descending);
+          g->weighted_rank_order(descending);
+        else if (rankOrderType == 7)
+          g->weighted_rank_order(balanced);
         else
             g->matching_rank_order();
         t1 = MPI_Wtime() - t0;

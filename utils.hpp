@@ -165,7 +165,7 @@ struct EdgeTuple
     {}
 };
 
-enum DegreeOrder { none, ascending, descending };
+enum DegreeOrder { none, ascending, descending, balanced };
 
 // Is nprocs a power-of-2?
 int is_pwr2(int pes) 
@@ -206,6 +206,19 @@ class sort_indices
      
      bool operator()(T i, T j) const 
      { return ptr_[i] < ptr_[j]; }
+   
+   private:
+     T* ptr_;
+};
+
+template <typename T>
+class sort_indices_greater
+{
+   public:
+     sort_indices_greater(T* ptr) : ptr_(ptr) {}
+     
+     bool operator()(T i, T j) const 
+     { return ptr_[i] > ptr_[j]; }
    
    private:
      T* ptr_;

@@ -50,6 +50,8 @@
 #include <climits>
 #include <array>
 #include <unordered_map>
+#include <unordered_set>
+#include <numeric>
 
 #if defined(USE_SHARED_MEMORY)
 #include <omp.h>
@@ -1390,6 +1392,36 @@ class Graph
                         std::stable_sort(idx.begin(), idx.end(),
                                 [&rcounts](int i1, int i2) {return rcounts[i1] > rcounts[i2];});
                     }
+                    else if (order == balanced)
+                    {
+                      std::vector<int> psum;
+                      std::inclusive_scan(rcounts.begin(), rcounts.end(), std::back_inserter(psum));
+                      psum.insert(psum.begin(), 0);
+
+                      for (int p = 0; p < size_-1; p++)
+                      {
+                        std::vector<int> sint, my_nbrs;
+                        std::copy(pe_list.data() + psum[p], pe_list.data() + psum[p+1], std::back_inserter(my_nbrs));
+                        
+                        for (int k = psum[p]; k < psum[p+1]; k++)
+                        {
+                          const int nbr = pe_list[k];
+                          std::unordered_set<int> s(&pe_list[psum[nbr]], &pe_list[psum[nbr] + rcounts[nbr]]);
+                          sint.push_back(std::count_if(my_nbrs.begin(), my_nbrs.end(), [&](int v) { return s.find(v) != s.end(); }));
+                        }
+                        
+                        std::stable_sort(pe_list.data() + psum[p], pe_list.data() + psum[p+1], sort_indices<int>(sint.data()));
+                      }
+
+                      std::vector<int> idx(size_);
+
+                      // follow normal distribution
+                      std::iota(idx.begin(), idx.end(), 0);
+                      std::stable_sort(idx.begin(), idx.end(), sort_indices<int>(rcounts.data()));
+
+                      std::sort(rcounts.begin(), rcounts.end(), std::less<int>());
+                      std::stable_sort(idx.begin() + (idx.size() / 2), idx.end(), sort_indices_greater<int>(rcounts.data()));
+                    }
                     else
                         std::stable_sort(idx.begin(), idx.end(), sort_indices<int>(rcounts.data()));
 
@@ -1441,7 +1473,123 @@ class Graph
             rcounts.clear();
             rdispls.clear();
         }
-        
+       
+        void common_neighbors_rank_order() const
+        {
+            std::vector<GraphElem> nbr_pes;
+            std::vector<GraphElem> ng_pes, index;
+	          std::unordered_map<int, GraphElem> pindex;
+	          std::string outfile = "NEVE_COMMON_MPI_RANK_ORDER." + std::to_string(size_); 
+
+            for (GraphElem v = 0; v < lnv_; v++)
+            {
+                GraphElem e0, e1;
+                this->edge_range(v, e0, e1);
+                for (GraphElem e = e0; e < e1; e++)
+                {
+                    Edge const& edge = this->get_edge(e);
+                    const int owner = this->get_owner(edge.tail_); 
+                    if (owner != rank_)
+                    {
+                        if (std::find(nbr_pes.begin(), nbr_pes.end(), owner) 
+                                == nbr_pes.end())
+                        {
+                            nbr_pes.push_back(owner);
+                        }
+                    }
+                }
+            }
+             
+            GraphElem nbr_pes_size = nbr_pes.size();
+            std::vector<int> rcounts, rdispls;
+            std::vector<GraphElem> pe_list, pe_map, pe_list_nodup;
+ 
+            if (rank_ == 0)
+            {
+                rcounts.resize(size_, 0);
+                rdispls.resize(size_, 0);
+            }
+
+            MPI_Gather((int*)&nbr_pes_size, 1, MPI_INT, rcounts.data(), 1, MPI_INT, 0, comm_);
+
+            if (rank_ == 0)
+            {
+                pe_map.resize(size_, 0);
+                
+                int idx = 0;
+                for (int i = 0; i < size_; i++)
+                {
+                    rdispls[i] = idx;
+                    idx += rcounts[i];
+                }
+                
+                pe_list.resize(idx, 0);
+            }
+
+            MPI_Barrier(comm_);
+
+            MPI_Gatherv(nbr_pes.data(), nbr_pes_size, MPI_GRAPH_TYPE, 
+                    pe_list.data(), rcounts.data(), rdispls.data(), 
+                    MPI_GRAPH_TYPE, 0, comm_);
+            
+            if (rank_ == 0)
+            {
+              for (GraphElem p = 0; p < size_; p++)
+              {
+                std::vector<GraphElem> sint(rcounts[p]);
+                for (GraphElem k = 0; k < rcounts[p]; k++)
+                {
+                  const GraphElem nbr = pe_list[k];
+                  std::unordered_set<GraphElem> s(&pe_list[rdispls[nbr]], &pe_list[rdispls[nbr] + rcounts[nbr]]);
+                  sint[k] = std::count_if(&pe_list[k], &pe_list[k + rcounts[p]], [&](GraphElem v) { return s.find(v) != s.end(); });
+                }
+                
+                std::stable_sort(&pe_list[p], &pe_list[p] + rcounts[p], sort_indices<GraphElem>(sint.data()));
+
+                for (GraphElem k = 0; k < rcounts[p]; k++)
+                {
+                  if (pe_map[pe_list[k]] == 0)
+                  {
+                    pe_map[pe_list[k]] = 1;
+                    pe_list_nodup.push_back(pe_list[k]);
+                  }
+                }
+              }
+
+              // isolated nodes
+              for (int p = 0; p < size_; p++)
+              {
+                if (pe_map[p] == 0)
+                  pe_list_nodup.push_back(p);
+              }
+
+              assert(pe_list_nodup.size() == size_);
+
+              std::ofstream ofile;
+              ofile.open(outfile.c_str(), std::ofstream::out);
+
+              for (int p = 0; p < size_-1; p++)
+                ofile << pe_list_nodup[p] << ",";
+              ofile << pe_list_nodup[size_-1]; 
+              ofile.close();
+
+              std::cout << "Rank order file: " << outfile << std::endl;
+              std::cout << "-------------------------------------------------------" << std::endl;
+            }
+            
+            MPI_Barrier(comm_);
+
+            pe_list.clear();
+            pe_list_nodup.clear();
+            nbr_pes.clear();
+            pe_map.clear();
+	          ng_pes.clear();
+	          pindex.clear();
+	          index.clear();
+            rcounts.clear();
+            rdispls.clear();
+        }
+
         void matching_rank_order() const
         {
             std::vector<GraphElem> nbr_pes, ng_pes;
