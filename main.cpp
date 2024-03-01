@@ -167,9 +167,17 @@ int main(int argc, char **argv)
         else if (rankOrderType == 6)
           g->weighted_rank_order(descending);
         else if (rankOrderType == 7)
-          g->weighted_rank_order(balanced);
-        else
+          g->weighted_rank_order(normal);
+        else if (rankOrderType == 8)
+          g->common_neighbors_rank_order(ascending);
+        else if (rankOrderType == 9)
+          g->common_neighbors_rank_order(descending);
+        else if (rankOrderType == 10)
+          g->common_neighbors_rank_order(normal);  
+        else if (rankOrderType >= 11)
             g->matching_rank_order();
+        else
+            g->weighted_rank_order(ascending);
         t1 = MPI_Wtime() - t0;
         double tr = 0.0;
         MPI_Reduce(&t1, &tr, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);

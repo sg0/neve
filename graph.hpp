@@ -1395,30 +1395,8 @@ class Graph
                         std::stable_sort(idx.begin(), idx.end(),
                                 [&rcounts](int i1, int i2) {return rcounts[i1] > rcounts[i2];});
                     }
-                    else if (order == balanced)
+                    else if (order == normal)
                     {
-                      std::vector<int> psum;
-                      std::inclusive_scan(rcounts.begin(), rcounts.end(), std::back_inserter(psum));
-                      psum.insert(psum.begin(), 0);
-
-                      for (int p = 0; p < size_-1; p++)
-                      {
-                        std::vector<int> sint, my_nbrs;
-                        std::copy(pe_list.data() + psum[p], pe_list.data() + psum[p+1], std::back_inserter(my_nbrs));
-                        
-                        for (int k = psum[p]; k < psum[p+1]; k++)
-                        {
-                          const int nbr = pe_list[k];
-                          std::unordered_set<int> s(&pe_list[psum[nbr]], &pe_list[psum[nbr] + rcounts[nbr]]);
-                          sint.push_back(std::count_if(my_nbrs.begin(), my_nbrs.end(), [&](int v) { return s.find(v) != s.end(); }));
-                        }
-                        
-                        std::stable_sort(pe_list.data() + psum[p], pe_list.data() + psum[p+1], sort_indices<int>(sint.data()));
-                      }
-
-                      std::vector<int> idx(size_);
-
-                      // follow normal distribution
                       std::iota(idx.begin(), idx.end(), 0);
                       std::stable_sort(idx.begin(), idx.end(), sort_indices<int>(rcounts.data()));
 
@@ -1480,7 +1458,7 @@ class Graph
             rdispls.clear();
         }
        
-        void common_neighbors_rank_order() const
+        void common_neighbors_rank_order(DegreeOrder order=none) const
         {
             std::vector<GraphElem> nbr_pes;
             std::vector<GraphElem> ng_pes, index;
@@ -1542,25 +1520,62 @@ class Graph
             {
               for (GraphElem p = 0; p < size_; p++)
               {
-                std::vector<GraphElem> sint(rcounts[p]);
+                std::vector<GraphElem> sint(rcounts[p]), nbrs;
+                std::copy(pe_list.data() + rdispls[p], pe_list.data() + rdispls[p] + rcounts[p], std::back_inserter(nbrs));
+
                 for (GraphElem k = 0; k < rcounts[p]; k++)
                 {
                   const GraphElem nbr = pe_list[k];
                   std::unordered_set<GraphElem> s(&pe_list[rdispls[nbr]], &pe_list[rdispls[nbr] + rcounts[nbr]]);
-                  sint[k] = std::count_if(&pe_list[k], &pe_list[k + rcounts[p]], [&](GraphElem v) { return s.find(v) != s.end(); });
+                  sint[k] = std::count_if(nbrs.begin(), nbrs.end(), [&](GraphElem v) { return s.find(v) != s.end(); });
                 }
                 
-                std::stable_sort(&pe_list[p], &pe_list[p] + rcounts[p], sort_indices<GraphElem>(sint.data()));
-
-                for (GraphElem k = 0; k < rcounts[p]; k++)
-                {
-                  if (pe_map[pe_list[k]] == 0)
-                  {
-                    pe_map[pe_list[k]] = 1;
-                    pe_list_nodup.push_back(pe_list[k]);
-                  }
-                }
+                std::stable_sort(&pe_list[rdispls[p]], &pe_list[rdispls[p]] + rcounts[p], sort_indices<GraphElem>(sint.data()));
               }
+                
+                if (order == none)
+                {
+                    for (GraphElem x = 0; x < pe_list.size(); x++)
+                    {
+                        if (pe_map[pe_list[x]] == 0)
+                        {
+                            pe_map[pe_list[x]] = 1;
+                            pe_list_nodup.push_back(pe_list[x]);
+                        }
+                    }
+                }
+                else
+                {
+                    std::vector<int> idx(rcounts.size());
+                    std::iota(idx.begin(), idx.end(), 0);
+
+                    if (order == ascending)
+                        std::stable_sort(idx.begin(), idx.end(), sort_indices<int>(rcounts.data()));
+                    else if (order == descending)
+                    {
+                        std::stable_sort(idx.begin(), idx.end(),
+                                [&rcounts](int i1, int i2) {return rcounts[i1] > rcounts[i2];});
+                    }
+                    else if (order == normal)
+                    {
+                      std::iota(idx.begin(), idx.end(), 0);
+                      std::stable_sort(idx.begin(), idx.end(), sort_indices<int>(rcounts.data()));
+
+                      std::sort(rcounts.begin(), rcounts.end(), std::less<int>());
+                      std::stable_sort(idx.begin() + (idx.size() / 2), idx.end(), sort_indices_greater<int>(rcounts.data()));
+                    }
+                    else
+                        std::stable_sort(idx.begin(), idx.end(), sort_indices<int>(rcounts.data()));
+                
+                    for (auto x : idx)
+                    {
+                        if (pe_map[pe_list[x]] == 0)
+                        {
+                            pe_map[pe_list[x]] = 1;
+                            pe_list_nodup.push_back(pe_list[x]);
+                        }
+                    }
+                }
 
               // isolated nodes
               for (int p = 0; p < size_; p++)

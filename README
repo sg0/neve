@@ -178,7 +178,10 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
 15. -o <1-??>       : Generates comma-separated (default) MPI rank order based on graph distribution across 
                       processes - regular (1), weighted (2), regular & ascending order of degrees (3), 
                       regular & descending order of degrees (4), weighted & ascending order of degrees (5), 
-                      weighted & descending order of degrees (6) and graph matching (>6). 
+                      weighted & descending order of degrees (6), weighted & normal distribution of degrees (7),  
+                      common neighbors & descending order of degrees (8), common neighbors & ascending order of 
+                      degrees (9), common neighbors & normal distribution of degrees (10) and graph matching (>=11).
+                      Default is weighted & ascending order of degrees (5).
 16. -a              : Perform top-down BFS (similar to Graph500 reference implementation).
 
 [*]Note: Unless -w or -t <...> is passed, the code will just load the graph and create the graph data 

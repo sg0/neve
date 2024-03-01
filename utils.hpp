@@ -165,7 +165,7 @@ struct EdgeTuple
     {}
 };
 
-enum DegreeOrder { none, ascending, descending, balanced };
+enum DegreeOrder { none, ascending, descending, normal };
 
 // Is nprocs a power-of-2?
 int is_pwr2(int pes) 
