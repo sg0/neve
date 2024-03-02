@@ -182,7 +182,10 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
                       common neighbors & descending order of degrees (8), common neighbors & ascending order of 
                       degrees (9), common neighbors & normal distribution of degrees (10) and graph matching (>=11).
                       Default is weighted & ascending order of degrees (5).
-16. -a              : Perform top-down BFS (similar to Graph500 reference implementation).
+16. -i <0-??>       : Dump out process graph (default: undirected), if greater than 0 (e.g., -i 1) is passed, 
+                      then graph in directed SANDIA Chaco format is returned.
+17. -a              : Perform top-down BFS (similar to Graph500 reference implementation).
+
 
 [*]Note: Unless -w or -t <...> is passed, the code will just load the graph and create the graph data 
 structure. This is deliberate, in case we want to measure the overhead of loading a graph and 
