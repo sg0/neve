@@ -1767,7 +1767,11 @@ class Graph
 
                 std::ofstream ofile;
                 ofile.open(outfile.c_str(), std::ofstream::out);
-#if defined(GEN_FUGAKU_HOSTMAP)
+
+#if defined(MAP_PER_ROW)
+                for (int p = 0; p < size_; p++)
+                    ofile << pe_list_nodup[p] << std::endl;
+#elif defined(GEN_FUGAKU_HOSTMAP)
                 for (int p = 0; p < size_; p++)
                     ofile << "(" << pe_list_nodup[p] << ")" << std::endl;
 #else
@@ -1794,10 +1798,15 @@ class Graph
             displs.clear();
         }
 
-	void pg_matrix() const
+        void pg_matrix(bool is_directed=false) const
         {
             std::vector<GraphElem> nbr_pes(size_*size_, 0), nbr_pes_root;
-	    std::string outfile = "NEVE_PG_MATRIX." + std::to_string(size_); 
+            std::string outfile = "NEVE_PG_MATRIX." + std::to_string(size_); 
+            GraphElem un_nedges = 0;
+
+            // TODO FIXME allow weights
+            if (is_directed)
+                outfile += ".CHACO_DIRECTED";
 
             for (GraphElem v = 0; v < lnv_; v++)
             {
@@ -1809,6 +1818,9 @@ class Graph
                     const int owner = this->get_owner(edge.tail_); 
                     if (owner != rank_)
                     {
+                        if (!nbr_pes[owner*size_ + rank_])
+                            un_nedges += 1;
+                        
                         nbr_pes[rank_*size_+owner] += 1;
                         nbr_pes[owner*size_+rank_] += 1;
                     }
@@ -1821,29 +1833,51 @@ class Graph
             MPI_Barrier(comm_);
 
             MPI_Reduce(nbr_pes.data(), nbr_pes_root.data(), size_*size_, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
-                       
-	    if (rank_ == 0)
+            MPI_Reduce(MPI_IN_PLACE, &un_nedges, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+
+            if (rank_ == 0)
             {
                 std::ofstream ofile;
                 ofile.open(outfile.c_str(), std::ofstream::out);
 
-                for (GraphElem p = 0; p < size_; p++)
+                if (!is_directed)
                 {
-                    for (GraphElem q = 0; q < size_; q++)
+                    for (GraphElem p = 0; p < size_; p++)
                     {
-                        if (q == size_-1)
-                            ofile << nbr_pes_root[p*size_+q];
-                        else
-                            ofile << nbr_pes_root[p*size_+q] << ",";
+                        for (GraphElem q = 0; q < size_; q++)
+                        {
+                            if (q == size_-1)
+                                ofile << nbr_pes_root[p*size_+q];
+                            else
+                                ofile << nbr_pes_root[p*size_+q] << ",";
+                        }
+                        ofile << std::endl;
                     }
-                    ofile << std::endl;
                 }
+                else
+                {
+                    ofile << "% Process graph (directed), as per SANDIA Chaco format" << std::endl;
+                    ofile << "  " << size_ << "  " << un_nedges / 2 << std::endl;
+
+                    for (GraphElem p = 0; p < size_; p++)
+                    {
+                        ofile << p + 1 << " "; 
+                        for (GraphElem q = 0; q < size_; q++)
+                        {
+                            if (nbr_pes_root[p*size_+q] > 0)
+                                ofile << q + 1 << " ";
+                            //ofile << p + 1 << " " << q + 1 << " " << nbr_pes_root[p*size_+q] << " ";
+                        }
+                        ofile << std::endl;
+                    }
+                }
+                
                 ofile.close();
 
                 std::cout << "Process graph matrix file: " << outfile << std::endl;
                 std::cout << "-------------------------------------------------------" << std::endl;
             }
-            
+
             MPI_Barrier(comm_);
 
             nbr_pes.clear();

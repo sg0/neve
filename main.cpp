@@ -77,7 +77,7 @@ static bool performLTTestNbrAlltoAll = false;
 static bool performLTTestNbrAllGather = false;
 static bool createRankOrder = false;
 static bool performBFS = false;
-static bool dumpSharedEdgesBetweenPEs = false;
+static int dumpSharedEdgesBetweenPEs = 0;
 static int rankOrderType = 0;
 
 static bool chooseSingleNbr = false;
@@ -148,8 +148,10 @@ int main(int argc, char **argv)
     g->print_dist_stats();
     assert(g != nullptr);
 
-    if (dumpSharedEdgesBetweenPEs)
+    if (!dumpSharedEdgesBetweenPEs)
         g->pg_matrix();
+    else
+        g->pg_matrix(true);
 
     if (createRankOrder) 
     {
@@ -365,7 +367,7 @@ void parseCommandLine(int argc, char** const argv)
   int ret;
   optind = 1;
 
-  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:ud:o:ai")) != -1) {
+  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:ud:o:ai:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -391,7 +393,7 @@ void parseCommandLine(int argc, char** const argv)
       maxSizeExchange = atol(optarg);
       break;
     case 'i':
-      dumpSharedEdgesBetweenPEs = true;
+      dumpSharedEdgesBetweenPEs = atol(optarg);
       break;
     case 'm':
       minSizeExchange = atol(optarg);
