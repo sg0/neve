@@ -1833,7 +1833,7 @@ class Graph
             MPI_Barrier(comm_);
 
             MPI_Reduce(nbr_pes.data(), nbr_pes_root.data(), size_*size_, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
-            MPI_Reduce(MPI_IN_PLACE, &un_nedges, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+            MPI_Allreduce(MPI_IN_PLACE, &un_nedges, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
 
             if (rank_ == 0)
             {
