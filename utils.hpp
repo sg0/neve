@@ -167,6 +167,8 @@ struct EdgeTuple
 
 enum DegreeOrder { none, ascending, descending, normal };
 
+enum ProcessGraphOutput { no, adjacency, chaco_unweighted, chaco_weighted };
+
 // Is nprocs a power-of-2?
 int is_pwr2(int pes) 
 { return ((pes != 0) && !(pes & (pes - 1))); }

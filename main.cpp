@@ -151,9 +151,13 @@ int main(int argc, char **argv)
     if (dumpSharedEdgesBetweenPEs)
     {
         if (dumpSharedEdgesBetweenPEs == 1)
-            g->pg_matrix();
+            g->pg_matrix(adjacency);
+        else if (dumpSharedEdgesBetweenPEs == 2)
+            g->pg_matrix(chaco_unweighted);
+        else if (dumpSharedEdgesBetweenPEs == 3)
+            g->pg_matrix(chaco_weighted);
         else
-            g->pg_matrix(true);
+            g->pg_matrix();
     }
 
     if (createRankOrder) 
