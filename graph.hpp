@@ -1879,7 +1879,7 @@ class Graph
                 else if (type == chaco_weighted)
                 {
                     ofile << "% Process graph (weighted directed), as per SANDIA Chaco format" << std::endl;
-                    ofile << "  " << size_ << "  " << un_nedges / 2 << std::endl;
+                    ofile << "  " << size_ << "  " << un_nedges / 2 << "  " << "001" << std::endl;
 
                     for (GraphElem p = 0; p < size_; p++)
                     {
