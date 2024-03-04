@@ -148,10 +148,13 @@ int main(int argc, char **argv)
     g->print_dist_stats();
     assert(g != nullptr);
 
-    if (!dumpSharedEdgesBetweenPEs)
-        g->pg_matrix();
-    else
-        g->pg_matrix(true);
+    if (dumpSharedEdgesBetweenPEs)
+    {
+        if (dumpSharedEdgesBetweenPEs == 1)
+            g->pg_matrix();
+        else
+            g->pg_matrix(true);
+    }
 
     if (createRankOrder) 
     {
