@@ -1807,9 +1807,9 @@ class Graph
             if (type == adjacency)
                 outfile += ".ADJ";
             else if (type == chaco_weighted)
-                outfile += ".CHACO_WEIGHTED_DIRECTED";
+                outfile += ".CHACO_WEIGHTED_UNDIRECTED";
             else if (type == chaco_unweighted)
-                outfile += ".CHACO_DIRECTED";
+                outfile += ".CHACO_UNDIRECTED";
             else
                 outfile += ".ADJ";
 
@@ -1861,7 +1861,7 @@ class Graph
                 }
                 else if (type == chaco_unweighted)
                 {
-                    ofile << "% Process graph (unweighted directed), as per SANDIA Chaco format" << std::endl;
+                    ofile << "% Process graph (unweighted undirected), as per SANDIA Chaco format" << std::endl;
                     ofile << "  " << size_ << "  " << un_nedges / 2 << std::endl;
 
                     for (GraphElem p = 0; p < size_; p++)
@@ -1878,7 +1878,7 @@ class Graph
                 }
                 else if (type == chaco_weighted)
                 {
-                    ofile << "% Process graph (weighted directed), as per SANDIA Chaco format" << std::endl;
+                    ofile << "% Process graph (weighted undirected), as per SANDIA Chaco format" << std::endl;
                     ofile << "  " << size_ << "  " << un_nedges / 2 << "  " << "101" << std::endl;
 
                     for (GraphElem p = 0; p < size_; p++)
