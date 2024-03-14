@@ -1838,7 +1838,13 @@ class Graph
             MPI_Barrier(comm_);
 
             MPI_Reduce(nbr_pes.data(), nbr_pes_root.data(), size_*size_, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+#ifndef SSTMAC
             MPI_Reduce(MPI_IN_PLACE, &un_nedges, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+#else
+            GraphElem tot_un_nedges = 0;
+            MPI_Reduce(&tot_un_nedges, &un_nedges, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+            un_nedges = tot_un_nedges;
+#endif
 
             if (rank_ == 0)
             {
