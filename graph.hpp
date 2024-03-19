@@ -1817,9 +1817,9 @@ class Graph
             if (type == adjacency)
                 outfile += ".ADJ";
             else if (type == chaco_weighted)
-                outfile += ".CHACO_WEIGHTED_UNDIRECTED";
+                outfile += ".CHACO_WEIGHTED_DIRECTED";
             else if (type == chaco_unweighted)
-                outfile += ".CHACO_UNDIRECTED";
+                outfile += ".CHACO_DIRECTED";
             else
                 outfile += ".ADJ";
 
@@ -1833,9 +1833,6 @@ class Graph
                     const int owner = this->get_owner(edge.tail_); 
                     if (owner != rank_)
                     {
-                        if (!nbr_pes[owner*size_ + rank_])
-                            un_nedges += 2;
-                        
                         nbr_pes[rank_*size_+owner] += 1;
                         nbr_pes[owner*size_+rank_] += 1;
                     }
@@ -1849,11 +1846,14 @@ class Graph
 
             MPI_Reduce(nbr_pes.data(), nbr_pes_root.data(), size_*size_, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
 
-            GraphElem this_un_nedges = un_nedges;
-            MPI_Reduce(&this_un_nedges, &un_nedges, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
-
             if (rank_ == 0)
             {
+              for (GraphElem k = 0; k < size_*size_; k++)
+              {
+                if (nbr_pes_root[k])
+                  un_nedges++;
+              }
+
                 std::ofstream ofile;
                 ofile.open(outfile.c_str(), std::ofstream::out);
 
@@ -1873,12 +1873,12 @@ class Graph
                 }
                 else if (type == chaco_unweighted)
                 {
-                    ofile << "% Process graph (unweighted undirected), as per SANDIA Chaco format" << std::endl;
+                    ofile << "% Process graph (unweighted directed), as per SANDIA Chaco format" << std::endl;
                     ofile << "  " << size_ << "  " << un_nedges / 2 << std::endl;
 
                     for (GraphElem p = 0; p < size_; p++)
                     {
-                        ofile << p + 1 << " "; 
+                        //ofile << p + 1 << " "; 
                         for (GraphElem q = 0; q < size_; q++)
                         {
                             if (nbr_pes_root[p*size_+q] > 0)
@@ -1890,7 +1890,7 @@ class Graph
                 }
                 else if (type == chaco_weighted)
                 {
-                    ofile << "% Process graph (weighted undirected), as per SANDIA Chaco format" << std::endl;
+                    ofile << "% Process graph (weighted directed), as per SANDIA Chaco format" << std::endl;
                     ofile << "  " << size_ << "  " << un_nedges / 2 << "  " << "1" << std::endl;
 
                     for (GraphElem p = 0; p < size_; p++)
