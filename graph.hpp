@@ -1408,10 +1408,20 @@ class Graph
 
                     for (auto x : idx)
                     {
-                        if (pe_map[pe_list[x]] == 0)
+                        GraphElem start, end;
+                        start = rdispls[x];
+                        if ((x + 1) == size_)
+                            end = pe_list.size();
+                        else
+                            end = rdispls[x+1];
+
+                        for (GraphElem id = start; id < end; id++)
                         {
-                            pe_map[pe_list[x]] = 1;
-                            pe_list_nodup.push_back(pe_list[x]);
+                            if (pe_map[pe_list[id]] == 0)
+                            {
+                                pe_map[pe_list[id]] = 1;
+                                pe_list_nodup.push_back(pe_list[id]);
+                            }
                         }
                     }
                 }
@@ -1824,7 +1834,7 @@ class Graph
                     if (owner != rank_)
                     {
                         if (!nbr_pes[owner*size_ + rank_])
-                            un_nedges += 1;
+                            un_nedges += 2;
                         
                         nbr_pes[rank_*size_+owner] += 1;
                         nbr_pes[owner*size_+rank_] += 1;
