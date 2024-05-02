@@ -2247,6 +2247,7 @@ class BFS
 
                 if (counter > nv) 
                   break;
+
                 int is_duplicate = 0;
 
                 for (GraphElem i = 0; i < bfs_root_idx; ++i) 
@@ -2275,6 +2276,8 @@ class BFS
                 
                 if (root_ok) 
                   break;
+                
+                counter++;
               }
 
               bfs_roots[bfs_root_idx] = root;
@@ -2379,6 +2382,7 @@ class BFS
 
                 if (counter > nv) 
                   break;
+                
                 int is_duplicate = 0;
 
                 for (GraphElem i = 0; i < sssp_root_idx; ++i) 
@@ -2407,6 +2411,8 @@ class BFS
                 
                 if (root_ok) 
                   break;
+
+                counter++;
               }
 
               sssp_roots[sssp_root_idx] = root;
@@ -2425,7 +2431,7 @@ class BFS
             for (GraphElem const& r : sssp_roots)
             {
                 if (rank_ == 0) 
-                    fprintf(stderr, "Running BFS %d\n", test_ctr);
+                    fprintf(stderr, "Running SSSP %d\n", test_ctr);
             
                 /* Set all vertices to "not visited." */
                 std::fill(pred_, pred_ + g_->get_lnv(), 0);
