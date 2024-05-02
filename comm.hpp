@@ -1940,7 +1940,7 @@ class BFS
         BFS(Graph* g): 
             g_(g), visited_(nullptr), pred_(nullptr), bufsize_(DEF_BFS_BUFSIZE),
             comm_(MPI_COMM_NULL), rank_(MPI_PROC_NULL), size_(0), 
-            ract_(0), sact_(nullptr), sctr_(nullptr),
+            ract_(0), sact_(nullptr), sctr_(nullptr), dist_(nullptr),
             sbuf_(nullptr), rbuf_(nullptr), sreq_(nullptr), rreq_(MPI_REQUEST_NULL), 
             oldq_(nullptr), newq_(nullptr), nranks_done_(0), newq_count_(0), 
             oldq_count_(0), seed_(DEF_BFS_SEED), edge_visit_count_(0)
@@ -1953,6 +1953,7 @@ class BFS
 
             visited_ = new GraphElem[lnv];
             pred_    = new GraphElem[lnv];
+            dist_    = new GraphWeight[lnv];
             oldq_    = new GraphElem[lnv];
             newq_    = new GraphElem[lnv];
             rbuf_    = new GraphElem[bufsize_*2];
@@ -1967,6 +1968,7 @@ class BFS
             std::fill(oldq_, oldq_ + lnv, -1);
             std::fill(newq_, newq_ + lnv, -1);
             std::fill(pred_, pred_ + lnv, -1);
+            std::fill(dist_, dist_ + lnv, -1.0);
             std::fill(visited_, visited_ + lnv, 0);
         }
 
@@ -1974,6 +1976,7 @@ class BFS
         {
             delete []visited_;
             delete []pred_;
+            delete []dist_;
             delete []oldq_;
             delete []newq_;
             delete []rbuf_;
@@ -2435,7 +2438,7 @@ class BFS
             
                 /* Set all vertices to "not visited." */
                 std::fill(pred_, pred_ + g_->get_lnv(), 0);
-                std::fill(dist_, dist_ + g_->get_lnv(), -1);
+                std::fill(dist_, dist_ + g_->get_lnv(), -1.);
 
                 /* Do the actual SSSP. */
                 double sssp_start = MPI_Wtime(), g_sssp_time = 0.0;
@@ -2520,6 +2523,8 @@ class BFS
                             }
                         }
                     }
+
+                    MPI_Barrier(comm_);
 
                     for (GraphElem p = 0; p < size_; p++)
                     {
