@@ -1215,7 +1215,7 @@ class Comm
         }
 	   
         // Bandwidth tests
-        void p2p_bw(int type)
+        void p2p_bw(int type, bool write_csv, std::string csv_filename)
         {
             double t, t_start, t_end, sum_t = 0.0;
             int loop = bw_loop_count_, skip = bw_skip_count_;
@@ -1271,6 +1271,16 @@ class Comm
                     << std::setw(15) << "STDDEV" 
                     << std::setw(16) << "95% CI" 
                     << std::endl;
+                
+                if (write_csv) {
+                    std::ofstream file;
+                    file.open(csv_filename, std::ios_base::app);
+                    file << second_line
+                         << ": " << size_ << " procs"
+                         << std::endl
+                         << "# Bytes,MB/s,Msg/s,Variance,STDDEV,95% CI"
+                         << std::endl;
+                }
             }
             
             for (GraphElem size = (!min_size_ ? 1 : min_size_); size <= max_size_; size *= 2) 
@@ -1329,6 +1339,18 @@ class Comm
                         << std::setw(16) << stddev 
                         << std::setw(16) << stddev * ZCI / sqrt((double)loop * avg_ng) 
                         << std::endl;
+                        
+                    if (write_csv) {
+                        std::ofstream file;
+                        file.open(csv_filename, std::ios_base::app);
+                        file << size << ","
+                             << bw << ","
+                             << 1e6 * bw / size << ","
+                             << var << ","
+                             << stddev << ","
+                             << stddev * stddev * ZCI / sqrt((double)loop * avg_ng)
+                             << std::endl;
+                    }
                 }
             }
         }
@@ -1412,7 +1434,7 @@ class Comm
         }
         
         // Latency test using MPI Isend/Irecv
-        void p2p_lt(int type) {
+        void p2p_lt(int type, bool write_csv, std::string csv_filename) {
             double t, t_start, t_end, sum_t = 0.0;
             int loop = lt_loop_count_, skip = lt_skip_count_;
         
@@ -1480,6 +1502,16 @@ class Comm
                           << std::setw(15) << "STDDEV"
                           << std::setw(16) << "95% CI"
                           << std::endl;
+                          
+                if (write_csv) {
+                    std::ofstream file;
+                    file.open(csv_filename, std::ios_base::app);
+                    file << second_line
+                         << ": " << size_ << " procs"
+                         << std::endl
+                         << "# Bytes,Lat(us),Max(us),99%(us),Variance,STDDEV,95% CI"
+                         << std::endl;
+                }
             }
         
             for (GraphElem size = min_size_; size <= max_size_; size  = (size ? size * 2 : 1)) {
@@ -1543,6 +1575,19 @@ class Comm
                               << std::setw(16) << stddev
                               << std::setw(16) << stddev * ZCI / sqrt((double)loop * sum_npairs)
                               << std::endl;
+                    
+                    if (write_csv) {
+                        std::ofstream file;
+                        file.open(csv_filename, std::ios_base::app);
+                        file << size << ","
+                             << avg_t << ","
+                             << lmax/2.0 << ","
+                             << plat[n99-1]/2.0 << ","
+                             << var << ","
+                             << stddev << ","
+                             << stddev * ZCI / sqrt((double)loop * sum_npairs)
+                             << std::endl;
+                    }
                 }
             }
             plat.clear();

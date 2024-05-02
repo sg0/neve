@@ -58,6 +58,8 @@ static std::string inputFileName;
 static std::string outputFileName;
 static bool graphIsProcessGraph = false;
 static bool writeOutputFile = false;
+static std::string outputCSVName;
+static bool writeCSV = false;
 static int me, nprocs;
 static int ranksPerNode = 1;
 static GraphElem nvRGG = 0;
@@ -110,6 +112,9 @@ int main(int argc, char **argv)
     // command line options
     MPI_Barrier(MPI_COMM_WORLD);
     parseCommandLine(argc, argv);
+    
+    MPI_Barrier(MPI_COMM_WORLD);
+    shmem_barrier_all();
  
     Graph* g = nullptr;
     
@@ -159,7 +164,6 @@ int main(int argc, char **argv)
 #warning "SSTMAC is defined: Trying to load external graph binaries will FAIL."
 #endif
     }
-
 #if defined(PRINT_GRAPH_EDGES)        
     g->print();
 #endif
@@ -270,32 +274,32 @@ int main(int argc, char **argv)
                 if (hardSkip)
                     c->p2p_bw_hardskip(0);
                 else
-                    c->p2p_bw(0);
+                    c->p2p_bw(0, writeCSV, outputCSVName);
             }
             break;
         case 1: // MPI RMA with MPI_Rput using fence
             c->allocate_MPI_RMA_window();
-            c->p2p_bw(bwOption);
+            c->p2p_bw(bwOption, writeCSV, outputCSVName);
             c->free_MPI_window();
             break;
         case 2: // MPI RMA with MPI_Rput using flush
             c->allocate_MPI_RMA_window();
             c->lock_MPI_window();
-            c->p2p_bw(bwOption);
+            c->p2p_bw(bwOption, writeCSV, outputCSVName);
             c->unlock_MPI_window();
             c->free_MPI_window();
             break;
         case 3: // MPI with nonblocking consensus
-            c->p2p_bw(bwOption);
+            c->p2p_bw(bwOption, writeCSV, outputCSVName);
             break;
         case 4: // SHMEM with barrier
             c->allocate_SHMEM_window();
-            c->p2p_bw(bwOption);
+            c->p2p_bw(bwOption, writeCSV, outputCSVName);
             c->free_SHMEM_window();
             break;
         case 5: // SHMEM with put_signal
             c->allocate_SHMEM_window();
-            c->p2p_bw(bwOption);
+            c->p2p_bw(bwOption, writeCSV, outputCSVName);
             c->free_SHMEM_window();
             break;
         }
@@ -346,7 +350,7 @@ int main(int argc, char **argv)
             }
             else
                 // run p2p_lt using nonblocking send/recv kernel
-                c->p2p_lt(0);
+                c->p2p_lt(0, writeCSV, outputCSVName);
             break;
             
         case 1: // MPI_Neighbor_alltoall
@@ -358,26 +362,26 @@ int main(int argc, char **argv)
         case 3: // MPI RMA with MPI_Rput using flush
             c->allocate_MPI_RMA_window();
             c->lock_MPI_window();
-            c->p2p_lt(3);
+            c->p2p_lt(3, writeCSV, outputCSVName);
             c->unlock_MPI_window();
             c->free_MPI_window();
             break;
         case 4: // MPI RMA with MPI_Rput using fence
             c->allocate_MPI_RMA_window();
-            c->p2p_lt(4);
+            c->p2p_lt(4, writeCSV, outputCSVName);
             c->free_MPI_window();
             break;
         case 5: // MPI with nonblocking consensus
-            c->p2p_lt(7);
+            c->p2p_lt(7, writeCSV, outputCSVName);
             break;
         case 6: // SHMEM with barrier
             c->allocate_SHMEM_window();
-            c->p2p_lt(9);
+            c->p2p_lt(9, writeCSV, outputCSVName);
             c->free_SHMEM_window();
             break;
         case 7: // SHMEM with put_signal
             c->allocate_SHMEM_window();
-            c->p2p_lt(8);
+            c->p2p_lt(8, writeCSV, outputCSVName);
             c->free_SHMEM_window();
             break;
         default:
@@ -439,7 +443,8 @@ void parseCommandLine(int argc, char** const argv)
             {"order",             required_argument, 0,  13  },
             {"bfs",               no_argument,       0,  14  },
             {"save",              required_argument, 0,  15  },
-            {0,                   0,                 0,  16  }
+            {"csv",               required_argument, 0,  16  },
+            {0,                   0,                 0,  17  }
         };
         c = getopt_long(argc, argv, "g:n:p:r:", long_options, &option_index);
         if (c == -1)
@@ -503,6 +508,10 @@ void parseCommandLine(int argc, char** const argv)
                 outputFileName.assign(optarg);
                 writeOutputFile = true;
                 createRankOrder = true;
+                break;
+            case 16:
+                outputCSVName.assign(optarg);
+                writeCSV = true;
                 break;
             default:
                 assert(0 && "Should not reach here!!");
