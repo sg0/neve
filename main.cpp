@@ -77,6 +77,7 @@ static bool performLTTestNbrAlltoAll = false;
 static bool performLTTestNbrAllGather = false;
 static bool createRankOrder = false;
 static bool performBFS = false;
+static bool performSSSP = false;
 static int dumpSharedEdgesBetweenPEs = 0;
 static int rankOrderType = 0;
 
@@ -218,7 +219,13 @@ int main(int argc, char **argv)
         BFS b(g);
         b.run_test();
     }
-    
+     
+    if (performSSSP)
+    {
+        BFS b(g);
+        b.run_test_sssp();
+    }
+
     if (performBWTest || performLTTest || performLTTestNbrAlltoAll || performLTTestNbrAllGather)
     {
         // Comm object can be instantiated
@@ -374,7 +381,7 @@ void parseCommandLine(int argc, char** const argv)
   int ret;
   optind = 1;
 
-  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:ud:o:ai:")) != -1) {
+  while ((ret = getopt(argc, argv, "f:r:n:lhp:m:x:bg:t:ws:z:ud:o:aji:")) != -1) {
     switch (ret) {
     case 'f':
       inputFileName.assign(optarg);
@@ -449,6 +456,9 @@ void parseCommandLine(int argc, char** const argv)
       break;
     case 'a':
       performBFS = true;
+      break;
+    case 'j':
+      performSSSP = true;
       break;
     default:
       assert(0 && "Should not reach here!!");

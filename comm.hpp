@@ -2327,6 +2327,352 @@ class BFS
             }
         }
 
+        GraphWeight get_weight(GraphElem u, GraphElem v)
+        {
+            GraphElem e0, e1;
+            g_->edge_range(g_->global_to_local(u), e0, e1);
+            for (GraphElem e = e0; e < e1; e++)
+            {
+                Edge const& edge = g_->get_edge(e);
+                if (edge.tail_ == v)
+                    return edge.tail_;
+            }
+            return 0;
+        }
+
+        void nbsend()
+        {
+            for (GraphElem owner = 0; owner < size_; owner++)
+            {
+                if (sctr_[owner] > 0 && !sact_[owner])
+                {
+                    MPI_Isend(&sbuf_[owner * bufsize_ * 2], bufsize_ * 2, MPI_GRAPH_TYPE, 
+                            owner, 0, comm_, &sreq_[owner]);
+
+                    sact_[owner] = 1;
+                    sctr_[owner] = 0;
+                }
+            }
+        }
+
+        void run_test_sssp(GraphElem nsssp_roots=DEF_BFS_ROOTS)
+        {
+            std::seed_seq seed{seed_};
+            std::mt19937 gen{seed};
+            std::uniform_int_distribution<GraphElem> uid(0, g_->get_nv()-1); 
+
+            std::vector<GraphElem> sssp_roots(nsssp_roots);
+            std::vector<double> sssp_times(nsssp_roots);
+
+            double t1 = MPI_Wtime();
+
+            // calculate bfs roots
+            GraphElem counter = 0, sssp_root_idx = 0, nv = g_->get_nv();
+            
+            for (sssp_root_idx = 0; sssp_root_idx < nsssp_roots; ++sssp_root_idx) 
+            {
+              GraphElem root;
+
+              while (1) 
+              {
+                root = uid(gen);
+
+                if (counter > nv) 
+                  break;
+                int is_duplicate = 0;
+
+                for (GraphElem i = 0; i < sssp_root_idx; ++i) 
+                {
+                  if (root == sssp_roots[i]) 
+                  {
+                    is_duplicate = 1;
+                    break;
+                  }
+                }
+
+                if (is_duplicate) 
+                  continue;
+
+                int root_ok = 0;
+                if (g_->get_owner(root) == rank_)
+                {
+                  GraphElem e0, e1;
+                  g_->edge_range(g_->global_to_local(root), e0, e1);
+                  if ((e0 + 1) != e1)
+                    root_ok = 1;
+                }
+                
+                MPI_Barrier(comm_);
+                MPI_Allreduce(MPI_IN_PLACE, &root_ok, 1, MPI_INT, MPI_LOR, MPI_COMM_WORLD);
+                
+                if (root_ok) 
+                  break;
+              }
+
+              sssp_roots[sssp_root_idx] = root;
+            }
+
+            nsssp_roots = sssp_root_idx;
+
+            double t2 = MPI_Wtime() - t1;
+            double root_t = 0.0;
+            MPI_Reduce(&t2, &root_t, 1, MPI_DOUBLE, MPI_SUM, 0, comm_);
+            if (rank_ == 0)
+              fprintf(stderr, "Average time(s) taken to calculate %ld SSSP root vertices: %f\n", nsssp_roots, root_t);
+
+            int test_ctr = 0;
+
+            for (GraphElem const& r : sssp_roots)
+            {
+                if (rank_ == 0) 
+                    fprintf(stderr, "Running BFS %d\n", test_ctr);
+            
+                /* Set all vertices to "not visited." */
+                std::fill(pred_, pred_ + g_->get_lnv(), 0);
+                std::fill(dist_, dist_ + g_->get_lnv(), -1);
+
+                /* Do the actual SSSP. */
+                double sssp_start = MPI_Wtime(), g_sssp_time = 0.0;
+                run_sssp(r);
+                double sssp_stop = MPI_Wtime();
+                sssp_times[test_ctr] = sssp_stop - sssp_start;
+                MPI_Allreduce(&sssp_times[test_ctr], &g_sssp_time, 1, MPI_DOUBLE, MPI_SUM, comm_);
+
+                if (rank_ == 0)
+                {
+                    double avgt = ((double)(g_sssp_time / (double)size_));
+                    sssp_times[test_ctr] = avgt;
+                    fprintf(stderr, "Average time(s), TEPS for SSSP %d, %d: %f\n", test_ctr, r, avgt);
+                }
+                    
+                test_ctr++;
+            }
+            
+            GraphElem ecg = 0; /* Total edge visitations. */
+            MPI_Reduce(&edge_visit_count_, &ecg, 1, MPI_GRAPH_TYPE, MPI_SUM, 0, comm_);
+                
+            if (rank_ == 0)
+            {
+                double avgt_nroots = std::accumulate(sssp_times.begin(), sssp_times.end(), 0.0) / sssp_roots.size();
+                fprintf(stderr, "-------------------------------------\n");
+                fprintf(stderr, "Average time(s), TEPS across %d roots: %f, %g\n", sssp_roots.size(), avgt_nroots, (double)((double)ecg / avgt_nroots));
+                fprintf(stderr, "-------------------------------------\n");
+            }
+        }
+
+        void run_sssp(GraphElem root) 
+        {
+            GraphElem sum = 0, qc = 0, q2c = 0;
+            GraphWeight delta = 10.0, mindelta = 0.0, maxdelta = delta;
+
+            const GraphElem lnv = g_->get_lnv();
+
+            GraphElem* q1  = new GraphElem[lnv];
+            GraphElem* q2  = new GraphElem[lnv];
+
+            std::fill(q1, q1 + lnv, -1);
+            std::fill(q2, q2 + lnv, -1);
+
+            MPI_Datatype edgeType;
+            createEdgeTupleType(&edgeType);
+
+            if (g_->get_owner(root) == rank_) 
+            {
+                q1[0] = g_->global_to_local(root); 
+                qc = 1;
+                pred_[g_->global_to_local(root)] = root;
+                dist_[g_->global_to_local(root)] = 0.0;
+                set_visited(root);
+            }
+
+            sum=1;
+
+            while(sum != 0) 
+            {
+#ifdef PRINT_DEBUG
+                double t0 = MPI_Wtime();
+#endif
+                std::vector<std::vector<EdgeTuple>> buf(size_, std::vector<EdgeTuple>());
+                std::vector<EdgeTuple> sbuf, rbuf;
+                std::vector<int> scounts(size_, 0), sdispls(size_, 0), rcounts(size_, 0), rdispls(size_, 0);
+                GraphElem sdisp = 0, rdisp = 0;
+
+                //1. iterate over light edges
+                while (sum!=0) 
+                {
+                    for(GraphElem i = 0; i < qc; i++)
+                    {
+                        GraphElem e0, e1;
+                        g_->edge_range(q1[i], e0, e1);
+                        for (GraphElem e = e0; e < e1; e++)
+                        {
+                            Edge const& edge = g_->get_edge(e);
+                            if (edge.tail_ < delta)
+                            {
+                                const int owner = g_->get_owner(edge.tail_);
+                                buf[owner].push_back({q1[i], edge.tail_, (dist_[g_->global_to_local(q1[i])] + edge.weight_)});
+                            }
+                        }
+                    }
+
+                    for (GraphElem p = 0; p < size_; p++)
+                    {
+                        std::copy(buf[p].begin(), buf[p].end(), std::back_inserter(sbuf));
+                        sdispls[p] = sdisp;
+                        scounts[p] = buf[p].size();
+                        sdisp += scounts[p];
+                        buf[p].clear();
+                    }
+
+                    buf.clear();
+
+                    MPI_Alltoall(scounts.data(), 1, MPI_GRAPH_TYPE, rcounts.data(), 1, MPI_GRAPH_TYPE, comm_);
+
+                    for (GraphElem p = 0; p < size_; p++)
+                    {
+                        rdispls[p] = rdisp;
+                        rdisp += rcounts[p];
+                    }
+
+                    rbuf.resize(rdisp);
+
+                    MPI_Alltoallv(sbuf.data(), scounts.data(), sdispls.data(), edgeType, rbuf.data(), rcounts.data(),
+                            rdispls.data(), edgeType, comm_);
+
+                    for (GraphElem j = 0; j < rdisp; j++) 
+                    {
+                        EdgeTuple tup = rbuf[j];
+                        GraphElem const& u = tup.ij_[0];
+                        GraphElem const& v = tup.ij_[1];
+                        GraphWeight const& dtv = tup.w_;
+
+                        if (dist_[g_->global_to_local(v)] != -1 && dist_[g_->global_to_local(v)] > dtv)
+                        {
+                            if (!test_visited(v)) 
+                            {
+                                dist_[g_->global_to_local(v)] = dtv;
+                                q2[q2c++] = v;
+                                pred_[g_->global_to_local(v)] = u;
+                                set_visited(v);
+                                edge_visit_count_++;
+                            }
+                        }
+                    }
+
+                    qc = q2c;
+                    q2c = 0;
+                    std::swap(q1, q2);
+                    sum = qc;
+
+                    MPI_Allreduce(&qc, &sum, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
+
+                    sbuf.clear();
+                    rbuf.clear();
+                    scounts.clear();
+                    sdispls.clear();
+                    rcounts.clear();
+                    rdispls.clear();
+                    sdisp = 0;
+                    rdisp = 0;
+                }
+
+                MPI_Barrier(comm_);
+
+                //2. iterate over S and heavy edges
+                for (GraphElem i = 0; i < lnv; i++)
+                {
+                    if (dist_[i] >= mindelta && dist_[i] < maxdelta)
+                    {
+                        GraphElem e0, e1;
+                        g_->edge_range(i, e0, e1);
+                        for (GraphElem e = e0; e < e1; e++)
+                        {
+                            Edge const& edge = g_->get_edge(e);
+                            if (edge.weight_ >= delta)
+                            {
+                                const int owner = g_->get_owner(edge.tail_);
+                                buf[owner].push_back({g_->local_to_global(i), edge.tail_, (dist_[i] + edge.weight_)});
+                            }
+                        }
+                    }
+                }
+
+                for (GraphElem p = 0; p < size_; p++)
+                {
+                    std::copy(buf[p].begin(), buf[p].end(), std::back_inserter(sbuf));
+                    sdispls[p] = sdisp;
+                    scounts[p] = buf[p].size();
+                    sdisp += scounts[p];
+                    buf[p].clear();
+                }
+
+                buf.clear();
+
+                MPI_Alltoall(scounts.data(), 1, MPI_GRAPH_TYPE, rcounts.data(), 1, MPI_GRAPH_TYPE, comm_);
+
+                for (GraphElem p = 0; p < size_; p++)
+                {
+                    rdispls[p] = rdisp;
+                    rdisp += rcounts[p];
+                }
+
+                rbuf.resize(rdisp);
+
+                MPI_Alltoallv(sbuf.data(), scounts.data(), sdispls.data(), edgeType, rbuf.data(), rcounts.data(),
+                        rdispls.data(), edgeType, comm_);
+
+                for (GraphElem j = 0; j < rdisp; j++) 
+                {
+                    EdgeTuple tup = rbuf[j];
+                    GraphElem const& u = tup.ij_[0];
+                    GraphElem const& v = tup.ij_[1];
+                    GraphWeight const& dtv = tup.w_;
+
+                    if (dist_[g_->global_to_local(v)] != -1 && dist_[g_->global_to_local(v)] > dtv)
+                    {
+                        if (!test_visited(v)) 
+                        {
+                            dist_[g_->global_to_local(v)] = dtv;
+                            pred_[g_->global_to_local(v)] = u;
+                            set_visited(v);
+                            edge_visit_count_++;
+                        }
+                    }
+                }
+
+
+                mindelta = maxdelta;
+                maxdelta += delta;
+                qc = 0;
+                sum = 0;
+
+                //3. Bucket processing and checking termination condition
+                for (GraphElem i = 0; i < lnv; i++)
+                {
+                    if (dist_[i] >= mindelta)
+                    {
+                        sum++; //how many are still to be processed
+                        if (dist_[i] < maxdelta)
+                            q1[qc++] = i; //this is lowest bucket
+                    }
+                }
+
+                GraphElem lsum = sum;
+                MPI_Allreduce(&lsum, &sum, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
+
+#ifdef PRINT_DEBUG
+                t0 -= MPI_Wtime();
+                if (rank_ == 0) 
+                    std::cout << "min/max delta: " << mindelta << ", " << maxdelta << std::endl;
+#endif
+
+            }
+            
+            freeEdgeTupleType(&edgeType);
+            delete []q1;
+            delete []q2;
+        }
+
     private:
         Graph* g_;
 
@@ -2335,6 +2681,8 @@ class BFS
 
         GraphElem bufsize_, newq_count_, oldq_count_, nranks_done_, ract_, seed_, edge_visit_count_;
         GraphElem *sbuf_, *rbuf_, *pred_, *visited_, *oldq_, *newq_, *sctr_, *sact_;
+        GraphWeight *dist_;
+
         MPI_Request *sreq_, rreq_;
 };
 

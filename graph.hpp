@@ -1337,7 +1337,7 @@ class Graph
                 }
             }
 
-	    std::sort(nbr_pes.begin()+1, nbr_pes.end(), sort_indices<GraphElem>(ng_pes.data()));
+	        std::sort(nbr_pes.begin()+1, nbr_pes.end(), sort_indices<GraphElem>(ng_pes.data()));
 
             std::vector<GraphElem> pe_list, pe_map, pe_list_nodup, pe_idx;
             std::vector<int> rcounts, rdispls;

@@ -165,6 +165,31 @@ struct EdgeTuple
     {}
 };
 
+#if !defined(USE_SHARED_MEMORY)
+#include <mpi.h>
+
+void createEdgeTupleType(MPI_Datatype* edgeType)
+{
+    EdgeTuple einfo;
+    MPI_Aint begin, s, t, w;
+
+    MPI_Get_address(&einfo, &begin);
+    MPI_Get_address(&einfo.ij_[0], &s);
+    MPI_Get_address(&einfo.ij_[1], &t);
+    MPI_Get_address(&einfo.w_, &w);
+
+    int blens[] = { 1, 1, 1 };
+    MPI_Aint displ[] = { s - begin, t - begin, w - begin };
+    MPI_Datatype types[] = { MPI_GRAPH_TYPE, MPI_GRAPH_TYPE, MPI_WEIGHT_TYPE };
+
+    MPI_Type_create_struct(3, blens, displ, types, edgeType);
+    MPI_Type_commit(edgeType);
+}
+
+void freeEdgeTupleType(MPI_Datatype* edgeType)
+{ MPI_Type_free(edgeType); }
+#endif
+
 enum DegreeOrder { none, ascending, descending, normal };
 
 enum ProcessGraphOutput { no, adjacency, chaco_unweighted, chaco_weighted };
