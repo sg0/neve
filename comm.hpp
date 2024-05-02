@@ -2245,6 +2245,8 @@ class BFS
               {
                 root = uid(gen);
 
+                counter++;
+                
                 if (counter > nv) 
                   break;
 
@@ -2275,9 +2277,7 @@ class BFS
                 MPI_Allreduce(MPI_IN_PLACE, &root_ok, 1, MPI_INT, MPI_LOR, MPI_COMM_WORLD);
                 
                 if (root_ok) 
-                  break;
-                
-                counter++;
+                  break;  
               }
 
               bfs_roots[bfs_root_idx] = root;
@@ -2380,6 +2380,8 @@ class BFS
               {
                 root = uid(gen);
 
+                counter++;
+                
                 if (counter > nv) 
                   break;
                 
@@ -2411,8 +2413,6 @@ class BFS
                 
                 if (root_ok) 
                   break;
-
-                counter++;
               }
 
               sssp_roots[sssp_root_idx] = root;
