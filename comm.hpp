@@ -2479,15 +2479,15 @@ class BFS
             GraphElem* q1  = new GraphElem[lnv];
             GraphElem* q2  = new GraphElem[lnv];
 
-            std::fill(q1, q1 + lnv, -1);
-            std::fill(q2, q2 + lnv, -1);
+            std::fill(q1, q1 + lnv, 0);
+            std::fill(q2, q2 + lnv, 0);
 
             MPI_Datatype edgeType;
             createEdgeTupleType(&edgeType);
 
             if (g_->get_owner(root) == rank_) 
             {
-                q1[0] = g_->global_to_local(root); 
+                q1[0] = root; 
                 qc = 1;
                 pred_[g_->global_to_local(root)] = root;
                 dist_[g_->global_to_local(root)] = 0.0;
@@ -2507,6 +2507,8 @@ class BFS
             sdispls.resize(size_, 0);
             rdispls.resize(size_, 0);
 
+            MPI_Barrier(comm_);
+
             while(sum != 0) 
             {
 #ifdef PRINT_DEBUG
@@ -2518,14 +2520,14 @@ class BFS
                     for(GraphElem i = 0; i < qc; i++)
                     {
                         GraphElem e0, e1;
-                        g_->edge_range(q1[i], e0, e1);
+                        g_->edge_range(g_->global_to_local(q1[i]), e0, e1);
                         for (GraphElem e = e0; e < e1; e++)
                         {
                             Edge const& edge = g_->get_edge(e);
                             if (edge.tail_ < delta)
                             {
                                 const int owner = g_->get_owner(edge.tail_);
-                                buf[owner].emplace_back(g_->local_to_global(q1[i]), edge.tail_, (dist_[q1[i]] + edge.weight_));
+                                buf[owner].emplace_back(q1[i], edge.tail_, (dist_[g_->global_to_local(q1[i])] + edge.weight_));
                             }
                         }
                     }
@@ -2534,8 +2536,7 @@ class BFS
 
                     for (GraphElem p = 0; p < size_; p++)
                     {
-                      if (!buf[p].empty())
-                        sbuf.insert(sbuf.begin(), buf[p].begin(), buf[p].end());
+                      sbuf.insert(sbuf.begin(), buf[p].begin(), buf[p].end());
                       scounts[p] = buf[p].size();
                       sdispls[p] = sdisp;
                       sdisp += scounts[p];
@@ -2578,7 +2579,6 @@ class BFS
                     qc = q2c;
                     q2c = 0;
                     std::swap(q1, q2);
-                    sum = qc;
 
                     MPI_Allreduce(&qc, &sum, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
 
@@ -2586,6 +2586,7 @@ class BFS
                     rdisp = 0;
                     sbuf.clear();
                     rbuf.clear();
+                    buf.resize(size_);
                 }
 
                 MPI_Barrier(comm_);
@@ -2611,8 +2612,7 @@ class BFS
 
                 for (GraphElem p = 0; p < size_; p++)
                 {           
-                  if (!buf[p].empty())
-                    sbuf.insert(sbuf.begin(), buf[p].begin(), buf[p].end());
+                  sbuf.insert(sbuf.begin(), buf[p].begin(), buf[p].end());
                   sdispls[p] = sdisp;
                   scounts[p] = buf[p].size();
                   sdisp += scounts[p];
@@ -2659,6 +2659,7 @@ class BFS
                 rdisp = 0;
                 sbuf.clear();
                 rbuf.clear();
+                buf.resize(size_);
 
                 //3. Bucket processing and checking termination condition
                 for (GraphElem i = 0; i < lnv; i++)
@@ -2667,7 +2668,7 @@ class BFS
                     {
                         sum++; //how many are still to be processed
                         if (dist_[i] < maxdelta)
-                            q1[qc++] = i; //this is lowest bucket
+                            q1[qc++] = g_->local_to_global(i); //this is lowest bucket
                     }
                 }
 
@@ -2680,7 +2681,8 @@ class BFS
                     std::cout << "min/max delta: " << mindelta << ", " << maxdelta << std::endl;
 #endif
             }
- 
+
+            buf.clear(); 
             sbuf.clear();
             rbuf.clear();
             scounts.clear();
