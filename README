@@ -184,7 +184,8 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
                       Default is weighted & ascending order of degrees (5).
 16. -i <0-??>       : Dump out process graph (default: adjacency), if greater than 0 (e.g., -i 1) is passed, 
                       then graph in directed SANDIA Chaco format is returned (-i 3 is for weighted).
-17. -a              : Perform top-down BFS (similar to Graph500 reference implementation).
+17. -a              : Perform top-down BFS (similar to Graph500 reference implementation). Build with 
+                      -DUSE_ALLREDUCE_FOR_EXIT, otherwise it hangs sometimes.
 18. -j              : Perform delta-stepping SSSP (similar to Graph500 reference implementation).
 
 [*]Note: Unless -w or -t <...> is passed, the code will just load the graph and create the graph data 
