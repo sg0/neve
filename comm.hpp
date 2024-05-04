@@ -2430,6 +2430,7 @@ class BFS
               fprintf(stderr, "Average time(s) taken to calculate %ld SSSP root vertices: %f\n", nsssp_roots, root_t);
 
             int test_ctr = 0;
+            sssp_times.resize(nsssp_roots);
 
             for (GraphElem const& r : sssp_roots)
             {
@@ -2438,7 +2439,7 @@ class BFS
             
                 /* Set all vertices to "not visited." */
                 std::fill(pred_, pred_ + g_->get_lnv(), 0);
-                std::fill(dist_, dist_ + g_->get_lnv(), -1.);
+                std::fill(dist_, dist_ + g_->get_lnv(), -1.0);
 
                 /* Do the actual SSSP. */
                 double sssp_start = MPI_Wtime(), g_sssp_time = 0.0;
@@ -2496,8 +2497,8 @@ class BFS
 
             sum=1;
                 
-            std::vector<std::vector<EdgeTuple>> buf;
-            std::vector<EdgeTuple> sbuf, rbuf;
+            std::vector<std::vector<EdgeTuple2>> buf;
+            std::vector<EdgeTuple2> sbuf, rbuf;
             std::vector<int> scounts, sdispls, rcounts, rdispls;
             GraphElem sdisp = 0, rdisp = 0;
             
@@ -2517,20 +2518,26 @@ class BFS
                 //1. iterate over light edges
                 while (sum != 0) 
                 {
-                    for(GraphElem i = 0; i < qc; i++)
+                  sdisp = 0;
+                  rdisp = 0;
+                  sbuf.clear();
+                  rbuf.clear();
+                  buf.resize(size_);
+
+                  for(GraphElem i = 0; i < qc; i++)
+                  {
+                    GraphElem e0, e1;
+                    g_->edge_range(g_->global_to_local(q1[i]), e0, e1);
+                    for (GraphElem e = e0; e < e1; e++)
                     {
-                        GraphElem e0, e1;
-                        g_->edge_range(g_->global_to_local(q1[i]), e0, e1);
-                        for (GraphElem e = e0; e < e1; e++)
-                        {
-                            Edge const& edge = g_->get_edge(e);
-                            if (edge.tail_ < delta)
-                            {
-                                const int owner = g_->get_owner(edge.tail_);
-                                buf[owner].emplace_back(q1[i], edge.tail_, (dist_[g_->global_to_local(q1[i])] + edge.weight_));
-                            }
-                        }
+                      Edge const& edge = g_->get_edge(e);
+                      if (edge.tail_ < delta)
+                      {
+                        const int owner = g_->get_owner(edge.tail_);
+                        buf[owner].emplace_back(q1[i], edge.tail_, (dist_[g_->global_to_local(q1[i])] + edge.weight_));
+                      }
                     }
+                  }
 
                     MPI_Barrier(comm_);
 
@@ -2540,7 +2547,6 @@ class BFS
                       scounts[p] = buf[p].size();
                       sdispls[p] = sdisp;
                       sdisp += scounts[p];
-                      buf[p].clear();
                     }
 
                     MPI_Alltoall(scounts.data(), 1, MPI_INT, rcounts.data(), 1, MPI_INT, comm_);
@@ -2558,10 +2564,10 @@ class BFS
 
                     for (GraphElem j = 0; j < rdisp; j++) 
                     {
-                        EdgeTuple tup = rbuf[j];
-                        GraphElem const& u = tup.ij_[0];
-                        GraphElem const& v = tup.ij_[1];
-                        GraphWeight const& dtv = tup.w_;
+                        EdgeTuple2 tup = rbuf[j];
+                        GraphElem u = tup.i_;
+                        GraphElem v = tup.j_;
+                        GraphWeight dtv = tup.w_;
 
                         if (dist_[g_->global_to_local(v)] != -1 && dist_[g_->global_to_local(v)] > dtv)
                         {
@@ -2581,15 +2587,15 @@ class BFS
                     std::swap(q1, q2);
 
                     MPI_Allreduce(&qc, &sum, 1, MPI_GRAPH_TYPE, MPI_SUM, comm_);
-
-                    sdisp = 0;
-                    rdisp = 0;
-                    sbuf.clear();
-                    rbuf.clear();
-                    buf.resize(size_);
                 }
 
                 MPI_Barrier(comm_);
+           
+                sdisp = 0;
+                rdisp = 0;
+                sbuf.clear();
+                rbuf.clear();
+                buf.resize(size_);
 
                 //2. iterate over S and heavy edges
                 for (GraphElem i = 0; i < lnv; i++)
@@ -2616,7 +2622,6 @@ class BFS
                   sdispls[p] = sdisp;
                   scounts[p] = buf[p].size();
                   sdisp += scounts[p];
-                  buf[p].clear();
                 }
 
                 MPI_Alltoall(scounts.data(), 1, MPI_INT, rcounts.data(), 1, MPI_INT, comm_);
@@ -2634,10 +2639,10 @@ class BFS
 
                 for (GraphElem j = 0; j < rdisp; j++) 
                 {
-                    EdgeTuple tup = rbuf[j];
-                    GraphElem const& u = tup.ij_[0];
-                    GraphElem const& v = tup.ij_[1];
-                    GraphWeight const& dtv = tup.w_;
+                    EdgeTuple2 tup = rbuf[j];
+                    GraphElem u = tup.i_;
+                    GraphElem v = tup.j_;
+                    GraphWeight dtv = tup.w_;
 
                     if (dist_[g_->global_to_local(v)] != -1 && dist_[g_->global_to_local(v)] > dtv)
                     {
@@ -2655,11 +2660,6 @@ class BFS
                 maxdelta += delta;
                 qc = 0;
                 sum = 0;
-                sdisp = 0;
-                rdisp = 0;
-                sbuf.clear();
-                rbuf.clear();
-                buf.resize(size_);
 
                 //3. Bucket processing and checking termination condition
                 for (GraphElem i = 0; i < lnv; i++)

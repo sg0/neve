@@ -167,15 +167,30 @@ struct EdgeTuple
 
 #if !defined(USE_SHARED_MEMORY)
 #include <mpi.h>
+struct EdgeTuple2
+{
+    GraphElem i_, j_;
+    GraphWeight w_;
+
+    EdgeTuple2(GraphElem i, GraphElem j, GraphWeight w): 
+        i_(i), j_(j), w_(w)
+    {}
+    EdgeTuple2(GraphElem i, GraphElem j): 
+        i_(i), j_(j), w_(1.0) 
+    {}
+    EdgeTuple2(): 
+        i_(-1), j_(-1), w_(0.0)
+    {}
+};
 
 void createEdgeTupleType(MPI_Datatype* edgeType)
 {
-    EdgeTuple einfo;
+    EdgeTuple2 einfo;
     MPI_Aint begin, s, t, w;
 
     MPI_Get_address(&einfo, &begin);
-    MPI_Get_address(&einfo.ij_[0], &s);
-    MPI_Get_address(&einfo.ij_[1], &t);
+    MPI_Get_address(&einfo.i_, &s);
+    MPI_Get_address(&einfo.j_, &t);
     MPI_Get_address(&einfo.w_, &w);
 
     int blens[] = { 1, 1, 1 };
