@@ -369,6 +369,8 @@ int main(int argc, char **argv)
     } // end latency/bandwidth tests
 
 
+    delete g;
+
     MPI_Barrier(MPI_COMM_WORLD);
    
     MPI_Finalize();

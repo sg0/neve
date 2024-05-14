@@ -940,6 +940,7 @@ class Graph
             edge_list_.clear();
             edge_indices_.clear();
             parts_.clear();
+            targets_.clear();
         }
          
         // update vertex partition information
