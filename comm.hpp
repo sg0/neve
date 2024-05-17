@@ -2493,7 +2493,7 @@ class BFS
         qc = 1;
         pred_[g_->global_to_local(root)] = root;
         dist_[g_->global_to_local(root)] = 0.0;
-        set_visited(root);
+        edge_visit_count_++;
       }
 
       sum=1;
@@ -2581,14 +2581,10 @@ class BFS
 
             if (dist_[g_->global_to_local(v)] != -1 && dist_[g_->global_to_local(v)] > dtv)
             {
-              if (!test_visited(v)) 
-              {
-                dist_[g_->global_to_local(v)] = dtv;
-                q2[q2c++] = v;
-                pred_[g_->global_to_local(v)] = u;
-                set_visited(v);
-                edge_visit_count_++;
-              }
+              dist_[g_->global_to_local(v)] = dtv;
+              q2[q2c++] = v;
+              pred_[g_->global_to_local(v)] = u;
+              edge_visit_count_++;
             }
           }
 
@@ -2668,13 +2664,9 @@ class BFS
 
           if (dist_[g_->global_to_local(v)] != -1.0 && dist_[g_->global_to_local(v)] > dtv)
           {
-            if (!test_visited(v)) 
-            {
-              dist_[g_->global_to_local(v)] = dtv;
-              pred_[g_->global_to_local(v)] = u;
-              set_visited(v);
-              edge_visit_count_++;
-            }
+            dist_[g_->global_to_local(v)] = dtv;
+            pred_[g_->global_to_local(v)] = u;
+            edge_visit_count_++;
           }
         }
 
