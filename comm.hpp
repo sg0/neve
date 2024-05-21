@@ -2307,6 +2307,7 @@ class BFS
 
         /* Set all vertices to "not visited." */
         std::fill(pred_, pred_ + g_->get_lnv(), 0);
+        std::fill(visited_, visited_ + g_->get_lnv(), 0);
 
         /* Do the actual BFS. */
         double bfs_start = MPI_Wtime(), g_bfs_time = 0.0;
@@ -2497,19 +2498,19 @@ class BFS
         qc = 1;
         pred_[g_->global_to_local(root)] = root;
         dist_[g_->global_to_local(root)] = 0.0;
+        
+        set_visited(root);
         edge_visit_count_++;
       }
 
       sum=1;
 
       std::vector<std::vector<EdgeTuple2>> buf;
-      EdgeTuple2 *sbuf, *rbuf;
+      std::vector<EdgeTuple2> sbuf, rbuf;
       std::vector<int> scounts, sdispls, rcounts, rdispls;
       GraphElem sdisp = 0, rdisp = 0;
 
       buf.resize(size_);
-      sbuf = nullptr;
-      rbuf = nullptr;
       scounts.resize(size_, 0);
       rcounts.resize(size_, 0);
       sdispls.resize(size_, 0);
@@ -2527,8 +2528,10 @@ class BFS
         {
           sdisp = 0;
           rdisp = 0;
-          delete []sbuf;
-          delete []rbuf;
+          sbuf.clear();
+          rbuf.clear();
+
+          std::fill(visited_, visited_ + g_->get_lnv(), 0);
 
           for(GraphElem i = 0; i < qc; i++)
           {
@@ -2541,22 +2544,17 @@ class BFS
               {
                 const int owner = g_->get_owner(edge.tail_);
                 buf[owner].push_back({q1[i], edge.tail_, (dist_[g_->global_to_local(q1[i])] + edge.weight_)});
-                sdisp++;
               }
             }
           }
-
-          if (sdisp)
-            sbuf = new EdgeTuple2[sdisp];
-          sdisp = 0;
 
           MPI_Barrier(comm_);
 
           for (GraphElem p = 0; p < size_; p++)
           {
             scounts[p] = buf[p].size();
-            std::memcpy(sbuf + sdisp, buf[p].data(), scounts[p]*sizeof(EdgeTuple2));
-            
+            std::copy(buf[p].begin(), buf[p].end(), std::back_inserter(sbuf));
+
             sdispls[p] = sdisp;
             sdisp += scounts[p];
           }
@@ -2569,10 +2567,9 @@ class BFS
             rdisp += rcounts[p];
           }
 
-          if (rdisp)
-            rbuf = new EdgeTuple2[rdisp];
+          rbuf.resize(rdisp);
 
-          MPI_Alltoallv(sbuf, scounts.data(), sdispls.data(), edgeType, rbuf, rcounts.data(),
+          MPI_Alltoallv(sbuf.data(), scounts.data(), sdispls.data(), edgeType, rbuf.data(), rcounts.data(),
               rdispls.data(), edgeType, comm_);
 
           for (GraphElem j = 0; j < rdisp; j++) 
@@ -2583,12 +2580,21 @@ class BFS
             GraphElem v = tup.j_;
             GraphWeight dtv = tup.w_;
 
-            if (dist_[g_->global_to_local(v)] != -1 && dist_[g_->global_to_local(v)] > dtv)
+            if (dist_[g_->global_to_local(v)] == -1.0 || dist_[g_->global_to_local(v)] > dtv)
             {
               dist_[g_->global_to_local(v)] = dtv;
-              q2[q2c++] = v;
               pred_[g_->global_to_local(v)] = u;
-              edge_visit_count_++;
+
+              if(!test_visited(v)) 
+              {
+                  //if falls into current bucket needs further reprocessing
+                  if(dtv < maxdelta) 
+                  { 
+                      q2[q2c++] = v;
+                      set_visited(v);
+                      edge_visit_count_++;
+                  }
+              }
             }
           }
 
@@ -2603,11 +2609,9 @@ class BFS
 
         sdisp = 0;
         rdisp = 0;
-        if (sbuf != nullptr)
-          delete []sbuf;
-        if (rbuf != nullptr)
-          delete []rbuf;
-
+        sbuf.clear();
+        rbuf.clear();
+        
         for (int p = 0; p < size_; p++)
           buf[p].clear();
 
@@ -2625,20 +2629,15 @@ class BFS
               {
                 const int owner = g_->get_owner(edge.tail_);
                 buf[owner].push_back({g_->local_to_global(i), edge.tail_, (dist_[i] + edge.weight_)});
-                sdisp++;
               }
             }
           }
         }
          
-        if (sdisp) 
-          sbuf = new EdgeTuple2[sdisp];
-        sdisp = 0;
-
         for (GraphElem p = 0; p < size_; p++)
         {    
           scounts[p] = buf[p].size();
-          std::memcpy(sbuf + sdisp, buf[p].data(), scounts[p]*sizeof(EdgeTuple2));
+          std::copy(buf[p].begin(), buf[p].end(), std::back_inserter(sbuf));
 
           sdispls[p] = sdisp;
           sdisp += scounts[p];
@@ -2652,10 +2651,9 @@ class BFS
           rdisp += rcounts[p];
         }
 
-        if (rdisp)
-          rbuf = new EdgeTuple2[rdisp];
+        rbuf.resize(rdisp);
 
-        MPI_Alltoallv(sbuf, scounts.data(), sdispls.data(), edgeType, rbuf, rcounts.data(),
+        MPI_Alltoallv(sbuf.data(), scounts.data(), sdispls.data(), edgeType, rbuf.data(), rcounts.data(),
             rdispls.data(), edgeType, comm_);
 
         for (GraphElem j = 0; j < rdisp; j++) 
@@ -2666,7 +2664,7 @@ class BFS
           GraphElem v = tup.j_;
           GraphWeight dtv = tup.w_;
 
-          if (dist_[g_->global_to_local(v)] != -1.0 && dist_[g_->global_to_local(v)] > dtv)
+          if (dist_[g_->global_to_local(v)] == -1.0 || dist_[g_->global_to_local(v)] > dtv)
           {
             dist_[g_->global_to_local(v)] = dtv;
             pred_[g_->global_to_local(v)] = u;
@@ -2702,12 +2700,10 @@ class BFS
         
       for (int p = 0; p < size_; p++)
         buf[p].clear();
+      
       buf.clear(); 
-
-      if (sbuf != nullptr)
-        delete []sbuf;
-      if (rbuf != nullptr)
-        delete []rbuf;
+      sbuf.clear(); 
+      rbuf.clear(); 
 
       scounts.clear();
       sdispls.clear();
