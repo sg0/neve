@@ -1934,6 +1934,10 @@ class Comm
 #define DEF_BFS_SEED (2)
 #endif
 
+#ifndef DEF_SSSP_DELTA
+#define DEF_SSSP_DELTA (0.1)
+#endif
+
 class BFS
 {
   public:
@@ -2362,7 +2366,7 @@ class BFS
     }
 
     // taken from Graph500 SSSP reference implementation with some adjustments
-    void run_test_sssp(GraphElem nsssp_roots=DEF_BFS_ROOTS)
+    void run_test_sssp(GraphElem nsssp_roots=DEF_BFS_ROOTS, GraphWeight sssp_delta=DEF_SSSP_DELTA)
     {
       std::seed_seq seed{seed_};
       std::mt19937 gen{seed};
@@ -2444,7 +2448,7 @@ class BFS
 
         /* Do the actual SSSP. */
         double sssp_start = MPI_Wtime(), g_sssp_time = 0.0;
-        run_sssp(r);
+        run_sssp(r, sssp_delta);
         double sssp_stop = MPI_Wtime();
         sssp_times[test_ctr] = sssp_stop - sssp_start;
         MPI_Allreduce(&sssp_times[test_ctr], &g_sssp_time, 1, MPI_DOUBLE, MPI_SUM, comm_);
@@ -2471,10 +2475,10 @@ class BFS
       }
     }
 
-    void run_sssp(GraphElem root) 
+    void run_sssp(GraphElem root, GraphWeight delta) 
     {
       GraphElem sum = 0, qc = 0, q2c = 0;
-      GraphWeight delta = 0.1, mindelta = 0.0, maxdelta = delta;
+      GraphWeight mindelta = 0.0, maxdelta = delta;
 
       const GraphElem lnv = g_->get_lnv();
 
