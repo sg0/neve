@@ -2299,6 +2299,7 @@ class BFS
         fprintf(stderr, "Average time(s) taken to calculate %d BFS root vertices: %f\n", nbfs_roots, root_t);
 
       int test_ctr = 0;
+      GraphElem lnv = g_->get_lnv();
 
       for (GraphElem const& r : bfs_roots)
       {
@@ -2306,8 +2307,8 @@ class BFS
           fprintf(stderr, "Running BFS %d\n", test_ctr);
 
         /* Set all vertices to "not visited." */
-        std::fill(pred_, pred_ + g_->get_lnv(), 0);
-        std::fill(visited_, visited_ + g_->get_lnv(), 0);
+        std::fill(pred_, pred_ + lnv, 0);
+        std::fill(visited_, visited_ + lnv, 0);
 
         /* Do the actual BFS. */
         double bfs_start = MPI_Wtime(), g_bfs_time = 0.0;
