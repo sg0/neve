@@ -2570,9 +2570,17 @@ class BFS
 
           rbuf.resize(rdisp);
 
+#if defined(REPLACE_SSSP_ALLTOALLV_WITH_SENDRECV)
+          for (int p = 0; p < size_; p++)
+          {
+              MPI_Sendrecv(sbuf.data() + sdispls[p], scounts[p], edgeType, p, 0, 
+                      rbuf.data() + rdispls[p], rcounts[p], edgeType, p, 0, 
+                      comm_, MPI_STATUS_IGNORE);
+          }
+#else
           MPI_Alltoallv(sbuf.data(), scounts.data(), sdispls.data(), edgeType, rbuf.data(), rcounts.data(),
               rdispls.data(), edgeType, comm_);
-
+#endif
           for (GraphElem j = 0; j < rdisp; j++) 
           {
             EdgeTuple2 tup = rbuf[j];
@@ -2654,8 +2662,17 @@ class BFS
 
         rbuf.resize(rdisp);
 
+#if defined(REPLACE_SSSP_ALLTOALLV_WITH_SENDRECV)
+          for (int p = 0; p < size_; p++)
+          {
+              MPI_Sendrecv(sbuf.data() + sdispls[p], scounts[p], edgeType, p, 0, 
+                      rbuf.data() + rdispls[p], rcounts[p], edgeType, p, 0, 
+                      comm_, MPI_STATUS_IGNORE);
+          }
+#else
         MPI_Alltoallv(sbuf.data(), scounts.data(), sdispls.data(), edgeType, rbuf.data(), rcounts.data(),
             rdispls.data(), edgeType, comm_);
+#endif
 
         for (GraphElem j = 0; j < rdisp; j++) 
         {
