@@ -60,6 +60,7 @@ static bool graphIsProcessGraph = false;
 static bool writeOutputFile = false;
 static std::string outputCSVName;
 static bool writeCSV = false;
+static std::string csv_metadata;
 static int me, nprocs;
 static int ranksPerNode = 1;
 static GraphElem nvRGG = 0;
@@ -248,6 +249,8 @@ int main(int argc, char **argv)
 //            c = new Comm(g, minSizeExchange, maxSizeExchange);
 
         MPI_Barrier(MPI_COMM_WORLD);
+
+        c->set_csv_metadata(csv_metadata);
 
         t0 = MPI_Wtime();
         // ---------------------------------------
@@ -444,7 +447,8 @@ void parseCommandLine(int argc, char** const argv)
             {"bfs",               no_argument,       0,  14  },
             {"save",              required_argument, 0,  15  },
             {"csv",               required_argument, 0,  16  },
-            {0,                   0,                 0,  17  }
+            {"metadata",          required_argument, 0,  17  },
+            {0,                   0,                 0,  18  }
         };
         c = getopt_long(argc, argv, "g:n:p:r:", long_options, &option_index);
         if (c == -1)
@@ -512,6 +516,9 @@ void parseCommandLine(int argc, char** const argv)
             case 16:
                 outputCSVName.assign(optarg);
                 writeCSV = true;
+                break;
+            case 17:
+                csv_metadata.assign(optarg);
                 break;
             default:
                 assert(0 && "Should not reach here!!");

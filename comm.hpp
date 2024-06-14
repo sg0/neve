@@ -646,6 +646,11 @@ class Comm
             MPI_Win_unlock_all(window);
         }
         
+        void set_csv_metadata(std::string metadata)
+        {
+            csv_metadata = metadata;
+        }
+        
         ~Comm() 
         {
             targets_.clear();
@@ -1231,31 +1236,31 @@ class Comm
             avg_ng = sum_ng / sum_npairs;
             
             void (Comm::*bw_kernel) (GraphElem const&);
-            char second_line[33];
+            char second_line[64];
             
             switch (type) {
                 case 0:
-                    strcpy(second_line, "--------Bandwidth test----------");
+                    strcpy(second_line, "Bandwidth (MPI Isend/Irecv)");
                     bw_kernel = &Comm::comm_kernel_bw;
                     break;
                 case 1:
-                    strcpy(second_line, "--Bandwidth test (Rput - fence)-");
+                    strcpy(second_line, "Bandwidth (Rput fence)");
                     bw_kernel = &Comm::comm_kernel_bw_rma_fence;
                     break;
                 case 2:
-                    strcpy(second_line, "--Bandwidth test (Rput - flush)-");
+                    strcpy(second_line, "Bandwidth (Rput flush)");
                     bw_kernel = &Comm::comm_kernel_bw_rma_flush;
                     break;
                 case 3:
-                    strcpy(second_line, "------Bandwidth test (nbx)------");
+                    strcpy(second_line, "Bandwidth (nbx)");
                     bw_kernel = &Comm::comm_kernel_bw_nbx;
                     break;
                 case 4:
-                    strcpy(second_line, "-Bandwidth test (SHMEM barrier)-");
+                    strcpy(second_line, "Bandwidth (SHMEM barrier)");
                     bw_kernel = &Comm::comm_kernel_bw_shmem_barrier;
                     break;
                 case 5:
-                    strcpy(second_line, "--Bandwidth test (SHMEM signal)-");
+                    strcpy(second_line, "Bandwidth (SHMEM put/signal)");
                     bw_kernel = &Comm::comm_kernel_bw_shmem_put_signal;
                     break;
             }
@@ -1263,7 +1268,7 @@ class Comm
             if(rank_ == 0) 
             {
                 std::cout << "--------------------------------" << std::endl;
-                std::cout << second_line << std::endl;
+                std::cout << "Test: " << second_line << std::endl;
                 std::cout << "--------------------------------" << std::endl;
                 std::cout << std::setw(12) << "# Bytes" << std::setw(13) << "MB/s" 
                     << std::setw(13) << "Msg/s" 
@@ -1275,8 +1280,9 @@ class Comm
                 if (write_csv) {
                     std::ofstream file;
                     file.open(csv_filename, std::ios_base::app);
-                    file << second_line
-                         << ": " << size_ << " procs"
+                    file << "protocol=" << second_line
+                         << ",processes=" << size_ 
+                         << (csv_metadata.empty()? "" : ",") << csv_metadata
                          << std::endl
                          << "# Bytes,MB/s,Msg/s,Variance,STDDEV,95% CI"
                          << std::endl;
@@ -1451,40 +1457,40 @@ class Comm
             
     #if defined(TEST_LT_MPI_PROC_NULL)
             // MPI_PROC_NULL
-            strcpy(second_line, "--Latency test (MPI_PROC_NULL)--");
+            strcpy(second_line, "Latency (MPI_PROC_NULL)");
             ltt_kernel = &Comm::comm_kernel_lt_pnull;
     #else
             switch (type) {
             case 0:
-                strcpy(second_line, "----------Latency test----------");
+                strcpy(second_line, "Latency (MPI Isend/Irecv)");
                 ltt_kernel = &Comm::comm_kernel_lt;
                 break;
             case 3:
-                strcpy(second_line, "---Latency test (Rput - flush)--");
+                strcpy(second_line, "Latency (Rput - flush)");
                 ltt_kernel = &Comm::comm_kernel_lt_rma_rput;
                 break;
             case 4:
-                strcpy(second_line, "---Latency test (Rput - fence)--");
+                strcpy(second_line, "Latency (Rput - fence)");
                 ltt_kernel = &Comm::comm_kernel_lt_rma_rput_fence;
                 break;
             case 5:
-                strcpy(second_line, "-------Latency test (Rget)------");
+                strcpy(second_line, "Latency (Rget)");
                 ltt_kernel = &Comm::comm_kernel_lt_rma_rget;
                 break;
             case 6:
-                strcpy(second_line, "---Latency test (Raccumulate)---");
+                strcpy(second_line, "Latency (Raccumulate)");
                 ltt_kernel = &Comm::comm_kernel_lt_rma_raccumulate;
                 break;
             case 7:
-                strcpy(second_line, "-------Latency test (nbx)-------");
+                strcpy(second_line, "Latency (nbx)");
                 ltt_kernel = &Comm::comm_kernel_lt_nbx;
                 break;
             case 8:
-                strcpy(second_line, "---Latency test (SHMEM signal)--");
+                strcpy(second_line, "Latency (SHMEM signal)");
                 ltt_kernel = &Comm::comm_kernel_lt_shmem_put_signal;
                 break;
             case 9:
-                strcpy(second_line, "--Latency test (SHMEM barrier)--");
+                strcpy(second_line, "Latency (SHMEM barrier)");
                 ltt_kernel = &Comm::comm_kernel_lt_shmem_barrier;
                 break;
             }
@@ -1493,7 +1499,7 @@ class Comm
             
             if(rank_ == 0) {
                 std::cout << "--------------------------------" << std::endl;
-                std::cout << second_line << std::endl;
+                std::cout << "Test: " << second_line << std::endl;
                 std::cout << "--------------------------------" << std::endl;
                 std::cout << std::setw(12) << "# Bytes" << std::setw(15) << "Lat(us)"
                           << std::setw(16) << "Max(us)"
@@ -1506,8 +1512,9 @@ class Comm
                 if (write_csv) {
                     std::ofstream file;
                     file.open(csv_filename, std::ios_base::app);
-                    file << second_line
-                         << ": " << size_ << " procs"
+                    file << "protocol=" << second_line
+                         << ",processes=" << size_ 
+                         << (csv_metadata.empty()? "" : ",") << csv_metadata
                          << std::endl
                          << "# Bytes,Lat(us),Max(us),99%(us),Variance,STDDEV,95% CI"
                          << std::endl;
@@ -2357,6 +2364,8 @@ class Comm
         int rank_, size_, indegree_, outdegree_;
         std::vector<int> targets_, sources_;
         MPI_Comm comm_, nbr_comm_;
+        
+        std::string csv_metadata;
 };
 
 #ifndef DEF_BFS_BUFSIZE

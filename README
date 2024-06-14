@@ -228,6 +228,13 @@ Possible options for MPI version, i.e., neve_mpi (can be combined):
 --save <filename>
     Writes the process graph to filename.
 
+--csv <filename>
+    Writes the output of a latency or bandwidth test to a CSV file.
+    
+--metadata <string>
+    Inserts additional text before the measurements segment of the output CSV. Useful to keep
+    track of environment settings used in a run that wouldn't be visible to neve.
+
 [*]Note: Unless --bandwidth or --latency <...> is passed, the code will just load the graph and create the graph data 
 structure. This is deliberate, in case we want to measure the overhead of loading a graph and 
 time only the file I/O part (like measuring the impact of different #aggregators through the 
