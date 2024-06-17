@@ -126,6 +126,10 @@ int main(int argc, char **argv)
     { 
         GenerateRGG gr(nvRGG);
         g = gr.generate(randomNumberLCG, true /*isUnitEdgeWeight*/, randomEdgePercent);
+        
+        char extra_metadata[128];
+        sprintf(extra_metadata, "graph size=%ld,percent extra edges=%f,", nvRGG, randomEdgePercent);
+        csv_metadata.insert(csv_metadata.size(), optarg);
     }
     else 
     {   // read input graph
@@ -518,7 +522,8 @@ void parseCommandLine(int argc, char** const argv)
                 writeCSV = true;
                 break;
             case 17:
-                csv_metadata.assign(optarg);
+                csv_metadata.insert(csv_metadata.size(), optarg);
+                csv_metadata.push_back(',');
                 break;
             default:
                 assert(0 && "Should not reach here!!");
