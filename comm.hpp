@@ -2484,6 +2484,10 @@ class BFS
 
       const GraphElem lnv = g_->get_lnv();
 
+#if defined(REPLACE_SSSP_ALLTOALLV_WITH_SENDRECV)
+      MPI_Request* srreq = new MPI_Request[2*size_];
+      std::fill(srreq, srreq + 2*size_, MPI_REQUEST_NULL);
+#endif
       GraphElem* q1  = new GraphElem[lnv];
       GraphElem* q2  = new GraphElem[lnv];
 
@@ -2573,11 +2577,16 @@ class BFS
 #if defined(REPLACE_SSSP_ALLTOALLV_WITH_SENDRECV)
           for (int p = 0; p < size_; p++)
           {
-              MPI_Sendrecv(sbuf.data() + sdispls[p], scounts[p], edgeType, p, 0, 
-                      rbuf.data() + rdispls[p], rcounts[p], edgeType, p, 0, 
-                      comm_, MPI_STATUS_IGNORE);
+              MPI_Irecv(rbuf.data() + rdispls[p], rcounts[p], edgeType, p, 0, 
+                      comm_, &srreq[p + size_]);
           }
-#else
+          for (int p = 0; p < size_; p++)
+          {
+              MPI_Isend(sbuf.data() + sdispls[p], scounts[p], edgeType, p, 0, 
+                      comm_, &srreq[p]);
+          }
+          MPI_Waitall(size_*2, srreq, MPI_STATUSES_IGNORE);
+#else          
           MPI_Alltoallv(sbuf.data(), scounts.data(), sdispls.data(), edgeType, rbuf.data(), rcounts.data(),
               rdispls.data(), edgeType, comm_);
 #endif
@@ -2663,12 +2672,17 @@ class BFS
         rbuf.resize(rdisp);
 
 #if defined(REPLACE_SSSP_ALLTOALLV_WITH_SENDRECV)
-          for (int p = 0; p < size_; p++)
-          {
-              MPI_Sendrecv(sbuf.data() + sdispls[p], scounts[p], edgeType, p, 0, 
-                      rbuf.data() + rdispls[p], rcounts[p], edgeType, p, 0, 
-                      comm_, MPI_STATUS_IGNORE);
-          }
+        for (int p = 0; p < size_; p++)
+        {
+          MPI_Irecv(rbuf.data() + rdispls[p], rcounts[p], edgeType, p, 0, 
+              comm_, &srreq[p + size_]);
+        }
+        for (int p = 0; p < size_; p++)
+        {
+          MPI_Isend(sbuf.data() + sdispls[p], scounts[p], edgeType, p, 0, 
+              comm_, &srreq[p]);
+        }
+        MPI_Waitall(size_*2, srreq, MPI_STATUSES_IGNORE);
 #else
         MPI_Alltoallv(sbuf.data(), scounts.data(), sdispls.data(), edgeType, rbuf.data(), rcounts.data(),
             rdispls.data(), edgeType, comm_);
@@ -2730,6 +2744,9 @@ class BFS
 
       freeEdgeTupleType(&edgeType);
 
+#if defined(REPLACE_SSSP_ALLTOALLV_WITH_SENDRECV)
+      delete []srreq;
+#endif      
       delete []q1;
       delete []q2;
     }
