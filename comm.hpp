@@ -2558,7 +2558,9 @@ class BFS
           for (GraphElem p = 0; p < size_; p++)
           {
             scounts[p] = buf[p].size();
-            std::copy(buf[p].begin(), buf[p].end(), std::back_inserter(sbuf));
+            
+            if (scounts[p])
+              std::copy(buf[p].begin(), buf[p].end(), std::back_inserter(sbuf));
 
             sdispls[p] = sdisp;
             sdisp += scounts[p];
@@ -2577,13 +2579,19 @@ class BFS
 #if defined(REPLACE_SSSP_ALLTOALLV_WITH_SENDRECV)
           for (int p = 0; p < size_; p++)
           {
+            if (rcounts[p]) 
+            {
               MPI_Irecv(rbuf.data() + rdispls[p], rcounts[p], edgeType, p, 0, 
-                      comm_, &srreq[p + size_]);
+                  comm_, &srreq[p + size_]);
+            }
           }
           for (int p = 0; p < size_; p++)
           {
+            if (scounts[p]) 
+            {
               MPI_Isend(sbuf.data() + sdispls[p], scounts[p], edgeType, p, 0, 
                       comm_, &srreq[p]);
+            }
           }
           MPI_Waitall(size_*2, srreq, MPI_STATUSES_IGNORE);
 #else          
@@ -2655,7 +2663,9 @@ class BFS
         for (GraphElem p = 0; p < size_; p++)
         {    
           scounts[p] = buf[p].size();
-          std::copy(buf[p].begin(), buf[p].end(), std::back_inserter(sbuf));
+          
+          if (scounts[p])
+            std::copy(buf[p].begin(), buf[p].end(), std::back_inserter(sbuf));
 
           sdispls[p] = sdisp;
           sdisp += scounts[p];
@@ -2674,13 +2684,19 @@ class BFS
 #if defined(REPLACE_SSSP_ALLTOALLV_WITH_SENDRECV)
         for (int p = 0; p < size_; p++)
         {
-          MPI_Irecv(rbuf.data() + rdispls[p], rcounts[p], edgeType, p, 0, 
-              comm_, &srreq[p + size_]);
+          if (rcounts[p]) 
+          {
+            MPI_Irecv(rbuf.data() + rdispls[p], rcounts[p], edgeType, p, 0, 
+                comm_, &srreq[p + size_]);
+          }
         }
         for (int p = 0; p < size_; p++)
         {
-          MPI_Isend(sbuf.data() + sdispls[p], scounts[p], edgeType, p, 0, 
-              comm_, &srreq[p]);
+          if (scounts[p]) 
+          {
+            MPI_Isend(sbuf.data() + sdispls[p], scounts[p], edgeType, p, 0, 
+                comm_, &srreq[p]);
+          }
         }
         MPI_Waitall(size_*2, srreq, MPI_STATUSES_IGNORE);
 #else
