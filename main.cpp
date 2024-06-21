@@ -129,7 +129,7 @@ int main(int argc, char **argv)
         
         char extra_metadata[128];
         sprintf(extra_metadata, "graph size=%ld,percent extra edges=%f,", nvRGG, randomEdgePercent);
-        csv_metadata.insert(csv_metadata.size(), optarg);
+        csv_metadata.append(extra_metadata, strlen(extra_metadata));
     }
     else 
     {   // read input graph
