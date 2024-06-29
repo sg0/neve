@@ -2180,13 +2180,13 @@ class GenerateRGG
             }
 
             // check if processes are power of 2
-            if (!is_pwr2(nprocs_)) {
-                if (rank_ == 0) {
-                    std::cout << "[ERROR] Number of processes must be a power of 2." << std::endl;
-                    std::cout << "Exiting..." << std::endl;
-                }
-                MPI_Abort(comm_, -99);
-            }
+//            if (!is_pwr2(nprocs_)) {
+//                if (rank_ == 0) {
+//                    std::cout << "[ERROR] Number of processes must be a power of 2." << std::endl;
+//                    std::cout << "Exiting..." << std::endl;
+//                }
+//                MPI_Abort(comm_, -99);
+//            }
 
             // calculate r(n)
             GraphWeight rc = sqrt((GraphWeight)log(nv)/(GraphWeight)(PI*nv));
