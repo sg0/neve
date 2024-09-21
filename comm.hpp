@@ -620,13 +620,13 @@ class Comm
             size_t window_size = in_nghosts_*max_size_*sizeof(char);
             shmem_window = (char *)shmem_malloc(window_size);
             if (!shmem_window) {
-                perror("Failed to malloc %ld for SHMEM window!\n", window_size);
+                fprintf(stderr, "Failed to malloc %ld for SHMEM window!\n", window_size);
                 exit(1);
             }
             size_t signals_size = sizeof(uint64_t) * outdegree_ * 500;
             signals = (uint64_t *)shmem_malloc(signals_size);
             if (!signals) {
-                perror("Failed to malloc %ld for SHMEM signals!\n", signals_size);
+                fprintf(stderr, "Failed to malloc %ld for SHMEM signals!\n", signals_size);
                 exit(1);
             }
         }
