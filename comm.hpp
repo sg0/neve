@@ -617,10 +617,16 @@ class Comm
         }
         
         void allocate_SHMEM_window() {
-            shmem_window = (char *)shmem_malloc(in_nghosts_*max_size_*sizeof(char));
-            signals = (uint64_t *)shmem_malloc(sizeof(uint64_t) * outdegree_ * 500);
-            if (!shmem_window || !signals) {
-                perror("SHMEM malloc failed!\n");
+            size_t window_size = in_nghosts_*max_size_*sizeof(char);
+            shmem_window = (char *)shmem_malloc(window_size);
+            if (!shmem_window) {
+                perror("Failed to malloc %ld for SHMEM window!\n", window_size);
+                exit(1);
+            }
+            size_t signals_size = sizeof(uint64_t) * outdegree_ * 500;
+            signals = (uint64_t *)shmem_malloc(signals_size);
+            if (!signals) {
+                perror("Failed to malloc %ld for SHMEM signals!\n", signals_size);
                 exit(1);
             }
         }
@@ -787,7 +793,7 @@ class Comm
                 shmem_putmem_signal(shmem_window, sbuf_, size, &signals[p], 1, SHMEM_SIGNAL_SET, targets_[p]);
 #endif
             }
-            for (int i = 0; i < outdegree_; i ++)
+            for (int i = 0; i < indegree_; i ++)
             {
                  shmem_long_wait_until((long *)&signals[i], SHMEM_CMP_EQ, 1);
             }
